@@ -1,0 +1,29 @@
+# Core
+numpy
+scipy
+pandas
+pyarrow
+
+# Filtering / state-space / regime models
+filterpy
+hmmlearn
+statsmodels
+arch          # GARCH, realized-variance / microstructure-noise tools
+
+# ML
+scikit-learn
+jax
+jaxlib
+torch
+
+# Data acquisition
+requests
+tqdm
+
+# Analysis / plotting
+matplotlib
+seaborn
+
+# Dev / notebooks
+jupyter
+pytest

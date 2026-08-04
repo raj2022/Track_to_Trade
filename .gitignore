@@ -1,0 +1,51 @@
+# Data (large, redownloadable from data.binance.vision / LOBSTER — not committed)
+data/
+*.zip
+*.csv
+*.parquet
+*.CHECKSUM
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+*.nbconvert.ipynb
+
+# Environment / secrets
+.env
+.env.*
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Logs and outputs
+logs/
+*.log
+outputs/
+*.png
+*.pdf
+!notes/**/*.pdf
+
+
+
+
+# Local Python virtual environment
+.quant_work/
+
+
+# other skipping
+../*
