@@ -3,6 +3,8 @@
 
 A research project applying particle-tracking state-space methods to financial regime detection — and, more importantly, stress-testing whether apparent regime-predictive power is genuine latent structure or an artifact of label construction.
 
+See `PROJECT_PROPOSAL.md` for the full narrative write-up (motivation, phase-by-phase detail, derivation log, interview talking points). This README is the live status tracker — quick orientation, not the full story.
+
 ## Motivation
 
 Charged-particle tracking and latent-state estimation in financial time series share identical mathematical structure: a Kalman filter recovers a hidden state (position/momentum, or price/drift/volatility) from noisy sequential measurements, using a process model for the state's dynamics and a measurement model for observation noise. Multi-hypothesis tracking (competing track candidates) maps onto multi-regime filtering (Interacting Multiple Model / regime-switching filters). Thresholds in both domains — hit-to-track association gates, regime-change detection — should be derived from the innovation covariance and an explicit error-rate target, not chosen by hand.
@@ -15,53 +17,64 @@ This is explicitly **not** an attempt to demonstrate a profitable trading strate
 
 ## Project structure
 
-| Phase | Weeks | Content |
-|---|---|---|
-| 1 | 1–2 | State-space filter (Kalman → IMM) with every parameter derived: process noise from realized quadratic variation, measurement noise from microstructure-noise estimation, transition probabilities from EM/Baum-Welch, detection gate from the innovation covariance via a chi-square test, jump/diffusion split via bipower variation. |
-| 2 | 2–4 | Artifact stress test: construct regime-label sets with and without look-ahead/overlap contamination, quantify apparent predictive power against a permutation-derived null, apply purged + embargoed cross-validation. |
-| 3 | 4–6 | Calibration: reliability diagrams and proper scoring rules (log score, CRPS) under purged out-of-sample evaluation; decision threshold derived from an explicit asymmetric cost matrix (Bayes risk), not fixed at 0.5. |
-| 4 | 6–8 | Stretch: latency/accuracy Pareto frontier under model compression, or cross-asset extension via a GNN. |
+| Phase | Weeks | Content | Status |
+|---|---|---|---|
+| 1 | 1–2 | State-space filter (Kalman → IMM), every parameter derived: process noise, measurement noise, transition probabilities, detection gate. | **Functionally complete** — baseline filter and IMM both built, evaluated, and compared. Naive baseline model and bipower jump/diffusion split still outstanding. |
+| 2 | 2–4 | Artifact stress test: leaky vs. purged label sets, permutation-derived null, walk-forward validation. | Not started |
+| 3 | 4–6 | Calibration (reliability diagrams, proper scoring rules) and a Bayes-risk decision threshold; cost-aware reality check using the derived spread estimates. | Not started |
+| 4 | 6–8 | Stretch: latency/accuracy Pareto frontier under model compression, or cross-asset extension via a GNN. | Not started |
 
 ## Data
 
-- **Primary:** Binance public spot market data ([data.binance.vision](https://data.binance.vision), [binance/binance-public-data](https://github.com/binance/binance-public-data)), `aggTrades`, BTCUSDT. Freely downloadable, MIT-licensed access, fully redistributable.
-- **Cross-check:** [LOBSTER](https://lobsterdata.com) free academic sample files (NASDAQ, full order-book depth) — used to calibrate the microstructure-noise model against a real limit order book rather than trades alone.
+- **Primary:** Binance public spot market data ([data.binance.vision](https://data.binance.vision), [binance/binance-public-data](https://github.com/binance/binance-public-data)), `aggTrades`, BTCUSDT. Freely downloadable, fully redistributable.
+- **Cross-check:** [LOBSTER](https://lobsterdata.com) free academic sample files (NASDAQ, full order-book depth) — reserved as an optional future check; not used so far, since R was ultimately derived directly from Binance tick data via Roll's estimator.
 
 ### Pulled windows (BTCUSDT, spot, aggTrades)
 
-Five contiguous 3-month windows chosen to capture actual regime *transitions*, not just periods inside a labeled regime, plus one calm baseline:
+Five contiguous 3-month windows chosen to capture actual regime *transitions*, not just periods inside a labeled regime, plus one calm baseline. All 15 monthly files downloaded and checksum-verified.
 
-- 2020-02 → 2020-04 (COVID crash)
-- 2021-04 → 2021-06 (May 2021 crash)
-- 2022-04 → 2022-06 (LUNA/UST collapse)
-- 2022-10 → 2022-12 (FTX collapse)
-- 2023-06 → 2023-08 (calm baseline)
+- 2020-02 → 2020-04 (COVID crash) — downloaded, not yet used
+- 2021-04 → 2021-06 (May 2021 crash) — downloaded, not yet used
+- 2022-04 → 2022-06 (LUNA/UST collapse) — **primary working window**, all Phase 1 derivations done here
+- 2022-10 → 2022-12 (FTX collapse) — downloaded, not yet used
+- 2023-06 → 2023-08 (calm baseline) — **verified calm window derived here** (2023-06-13 → 2023-06-19), used for the R derivation
 
-**Note:** Binance SPOT timestamps are in milliseconds before 2025-01-01 and microseconds from 2025-01-01 onward. Any window straddling that boundary needs unit-aware parsing.
+**Note:** Binance SPOT timestamps are in milliseconds before 2025-01-01 and microseconds from 2025-01-01 onward. Any window straddling that boundary needs unit-aware parsing (doesn't affect any window pulled so far).
 
 ## Repository layout
 
 ```
 data/            raw pulled zips + checksums (not committed — see .gitignore)
-scripts/         download, verification, and preprocessing scripts
+scripts/         download, derivation, and filter-runner scripts
 notebooks/       phase-by-phase analysis
-src/             filter implementation, label construction, validation utilities
-notes/           derivations — every threshold in this project traces to a written derivation here
+src/             filter implementations (kalman.py, imm.py) -- both unit-validated
+                 against synthetic data with known ground truth before real use
+notes/           derivations — every threshold in this project traces to a written
+                 derivation here, including rejected attempts
+plots/           generated figures (convention adopted partway through Phase 1;
+                 earlier plots saved to the working directory instead)
 ```
 
 ## Status
 
 - [x] Project scoped
-- [ ] Data pulled and checksum-verified
-- [ ] Process noise (Q) derived from realized quadratic variation
-- [ ] Measurement noise (R) derived from microstructure-noise estimator
-- [ ] Baseline Kalman filter implemented
-- [ ] IMM extension implemented
-- [ ] Detection gate derived from innovation covariance
-- [ ] Artifact stress test built
-- [ ] Calibration and decision-threshold derivation
+- [x] Data pulled and checksum-verified (15 files, 5 windows)
+- [x] Calm-window selection derived and verified (2023-06-13 → 2023-06-19)
+- [x] Measurement noise (R) derived — Roll's estimator, 3.661×10⁻¹¹ (calm), regime-conditionality tested and confirmed necessary (86.7x higher during crisis)
+- [x] Process noise (Q) derived — rolling realized-variance rate, dt=60s, 1D window
+- [x] Baseline (single-hypothesis) Kalman filter implemented and evaluated — found miscalibrated in a specific, diagnosed way (motivates the IMM)
+- [x] Detection gate derived from innovation covariance via chi-square test, explicit false-alarm-rate target
+- [x] IMM extension implemented — K=5 regimes (BIC-selected), per-regime Q/R derived, transition matrix from EM/Baum-Welch, validated on synthetic data, run on 2022-05
+- [ ] Naive baseline model (trailing-median rule) — outstanding
+- [ ] Bipower-variation jump/diffusion decomposition — outstanding
+- [ ] Open item: state 0/3 flickering in the IMM — candidate K=4 recheck not yet run
+- [ ] Artifact stress test (Phase 2)
+- [ ] Calibration and decision-threshold derivation (Phase 3)
+
+See `notes/imm_filter_result_phase1_closeout.md` for the full Phase 1 result and open items.
 
 ## Non-goals
 
 - This is not a backtested trading strategy and makes no profitability claims.
 - Public daily/short-horizon data over a few weeks of work is not sufficient evidence of exploitable alpha, and no such claim is made.
+- The IMM's persistence result is not claimed to be fully resolved — a genuine decay across the event window, and unexplained flickering between two low-variance regimes, are reported openly rather than smoothed over.
