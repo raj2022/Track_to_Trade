@@ -36,10 +36,19 @@ def load_trades(zip_path: Path) -> pd.DataFrame:
     return df.set_index("timestamp").sort_index()
 
 
-def build_returns(price: pd.Series, dt_sec: int) -> np.ndarray:
+def build_returns(price: pd.Series, dt_sec: int) -> tuple[np.ndarray, float]:
+    """Returns (standardized returns, scale). Returns at this dt are tiny in
+    magnitude (~1e-4), which caused real numerical instability in diagonal-
+    covariance EM (hmmlearn's own 'Model is not converging' warnings fired
+    on every K). Standardizing before fitting and rescaling afterward is the
+    standard fix -- addresses the precision problem directly rather than
+    just increasing n_iter and hoping the instability goes away on its own."""
     resampled = price.resample(f"{dt_sec}s").last().ffill()
     log_ret = np.log(resampled).diff().dropna()
-    return log_ret.to_numpy().reshape(-1, 1)
+    raw = log_ret.to_numpy()
+    scale = raw.std()
+    standardized = (raw / scale).reshape(-1, 1)
+    return standardized, scale
 
 
 def fit_best_hmm(returns: np.ndarray, k: int, n_restarts: int, seed: int):
@@ -48,7 +57,7 @@ def fit_best_hmm(returns: np.ndarray, k: int, n_restarts: int, seed: int):
     for i in range(n_restarts):
         model = GaussianHMM(
             n_components=k, covariance_type="diag",
-            n_iter=200, random_state=seed + i,
+            n_iter=500, tol=1e-6, random_state=seed + i,
         )
         model.fit(returns)
         ll = model.score(returns)
@@ -74,9 +83,9 @@ def main():
         sys.exit(1)
 
     df = load_trades(Path(sys.argv[1]))
-    returns = build_returns(df["price"], DT_SEC)
+    returns, scale = build_returns(df["price"], DT_SEC)
     n_obs = len(returns)
-    print(f"Fitting on {n_obs:,} returns (dt={DT_SEC}s)")
+    print(f"Fitting on {n_obs:,} standardized returns (dt={DT_SEC}s, scale={scale:.6e})")
 
     print(f"\n{'K':>3}  {'log-likelihood':>16}  {'n_params':>9}  {'BIC':>14}")
     results = {}
@@ -91,13 +100,15 @@ def main():
     print(f"\nBIC-selected K = {best_k}")
 
     model, ll, bic_val = results[best_k]
-    variances = model.covars_.flatten()
+    variances = model.covars_.flatten() * (scale ** 2)   # rescale to real units
+    means = model.means_.flatten() * scale                # rescale to real units
     order = np.argsort(variances)  # sort states calm -> volatile for readability
 
-    print(f"\nRegime variances (per-step, dt={DT_SEC}s), sorted calm -> volatile:")
+    print(f"\nRegime variances (per-step, dt={DT_SEC}s, rescaled to real return units), "
+          f"sorted calm -> volatile:")
     for rank, state in enumerate(order):
         print(f"  state {state} (rank {rank}): variance = {variances[state]:.6e}, "
-              f"mean = {model.means_.flatten()[state]:.6e}")
+              f"mean = {means[state]:.6e}")
 
     print(f"\nTransition matrix (rows = from-state, cols = to-state), original state order:")
     print(np.array2string(model.transmat_, precision=4, suppress_small=True))
@@ -135,4 +146,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    

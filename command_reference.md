@@ -19,6 +19,11 @@ pip install -r requirements.txt
 python -c "import numpy, pandas, jax, torch, hmmlearn, arch; print('all imports OK')"
 ```
 
+Note: if the venv is ever moved, verify it still resolves correctly before
+assuming it's broken — check `<venv>/pyvenv.cfg` and `<venv>/bin/python*`
+symlinks against the current project path. Rebuild only if they actually
+point somewhere stale.
+
 ## Data acquisition
 
 ```bash
@@ -45,6 +50,10 @@ python scripts/pick_calm_window.py data/raw/BTCUSDT-aggTrades-2022-04.zip
 # Attempt 2 (accepted): June 2023 — trim excluded 3/30 days, matching
 # visual outliers. Selected window: 2023-06-13 to 2023-06-19
 python scripts/pick_calm_window.py data/raw/BTCUSDT-aggTrades-2023-06.zip
+
+# Reused later on 2022-05 to check whether "pre-event" could be assumed
+# calm (it couldn't -- see baseline filter evaluation, below)
+python scripts/pick_calm_window.py data/raw/BTCUSDT-aggTrades-2022-05.zip
 ```
 
 ## Microstructure noise (R) derivation
@@ -67,6 +76,12 @@ python scripts/roll_estimator.py data/raw/BTCUSDT-aggTrades-2023-06.zip \
   --start 2023-06-13 --end 2023-06-19
 # -> R (all-tick, selected) = 3.661341181889e-11
 # -> R (same-timestamp excluded, robustness check) = 4.098231808572e-11 (+11.93%)
+
+# Tested whether R is regime-invariant (flagged as an open item in the
+# original R derivation) -- it is NOT: crisis-window R is 86.7x the calm value
+python scripts/check_R_regime_invariance.py data/raw/BTCUSDT-aggTrades-2022-05.zip
+# -> R (crisis, 05-09 to 05-12) = 3.175645120926e-09
+# -> ratio (crisis/calm) = 86.73x -> R must be regime-conditional, not shared
 ```
 
 ## Regime-varying process noise (Q) derivation
@@ -87,13 +102,66 @@ python scripts/diurnal_check.py data/raw/BTCUSDT-aggTrades-2022-05.zip
 #    (working hypothesis: Binance perpetual funding settlement, unverified)
 ```
 
+## Baseline (single-hypothesis) Kalman filter
+
+```bash
+# Local-level Kalman filter using the derived R and rolling Q as fixed,
+# calibrated inputs. Derives the chi-square gate from an explicit target
+# false-alarm rate (1/day) rather than a stated significance level.
+python scripts/run_baseline_filter.py data/raw/BTCUSDT-aggTrades-2022-05.zip
+# -> 1.176% of steps flagged vs. a 0.069% target (~17x over)
+# -> pre/during/post flag rates: 1.945% / 1.476% / 0.789% (elevated in ALL
+#    three periods -- not event-specific; see baseline_filter_evaluation.md)
+```
+
+## HMM regime fit and per-state derivations (IMM inputs)
+
+```bash
+# Fits a Gaussian HMM (EM/Baum-Welch) to 2022-05 returns, K=2..5, selects
+# K by BIC rather than asserting it. First run showed "not converging"
+# warnings across every K -- fixed by standardizing returns before fitting.
+python scripts/fit_regime_hmm.py data/raw/BTCUSDT-aggTrades-2022-05.zip
+# -> K=5 selected (BIC), modest margin over K=4 (608 pts vs. 1507 for K3->K4)
+# -> per-state variances and transition matrix -- see notes/ for full table
+
+# Roll's estimator computed SEPARATELY for each of the 5 HMM states (tick
+# pairs restricted to that state's bins), rather than mapping 5 variance
+# levels onto only 2 (calm/crisis) R estimates. Refits the same K=5 HMM
+# internally (same seed/restarts) to reproduce the state labeling.
+python scripts/per_state_R.py data/raw/BTCUSDT-aggTrades-2022-05.zip
+# -> per-state R_k and Q_k = HMM_variance_k - 2*R_k, all 5 states
+# -> state 4's R (3.620e-11) closely matched the original calm-window R
+#    (3.661e-11) -- unplanned cross-validation
+# -> state 0's R clipped from a small negative value to 0
+```
+
+## IMM (Interacting Multiple Model) filter
+
+```bash
+# Runs the IMM using the derived per-regime Q/R and the fitted transition
+# matrix as fixed inputs (not re-fit here). Saves to plots/, per the
+# plots-folder convention adopted partway through the project -- earlier
+# scripts save plots to the working directory instead; not retroactively
+# changed.
+python scripts/run_imm_filter.py data/raw/BTCUSDT-aggTrades-2022-05.zip
+# -> mean P(elevated/extreme): 0.159 pre-event, 0.830 during 05-09 to 05-13,
+#    0.424 during 05-13 to 05-19 (real decay, reported honestly -- not just
+#    the flattering 10-day aggregate of 0.587)
+# -> open item: states 0/3 show persistent flickering throughout the month,
+#    traced to the fitted transition matrix itself -- see notes/ for detail
+```
+
 ## Status
 
 - R derived and documented: `notes/microstructure_noise_R_derivation.md`
 - Q derived and documented: `notes/regime_varying_Q_derivation.md`
 - Calm-window selection documented: `notes/calm_window_selection.md`
+- Baseline filter evaluation documented: `notes/baseline_filter_evaluation.md`
+- IMM result and Phase 1 close-out documented: `notes/imm_filter_result_phase1_closeout.md`
 
 ## Next commands (not yet run)
 
-- Baseline model script (naive rule, evaluated walk-forward) — not yet written
-- Kalman/IMM filter implementation — not yet written
+- Naive baseline model (trailing-median rule, evaluated walk-forward) — not yet written
+- Bipower-variation jump/diffusion decomposition — not yet written
+- K=4 HMM refit-and-compare, to resolve the state 0/3 flickering open item — not yet run
+- Phase 2: label-set construction (leaky vs. purged), permutation null, walk-forward evaluation harness — not yet written
