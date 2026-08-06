@@ -3,6 +3,8 @@
 
 A research project applying particle-tracking state-space methods to financial regime detection — and, more importantly, stress-testing whether apparent regime-predictive power is genuine latent structure or an artifact of label construction.
 
+**Status: all four planned phases complete.** See `PROJECT_PROPOSAL.md` Section 12 for the full derivation log and interview talking points.
+
 See `PROJECT_PROPOSAL.md` for the full narrative write-up (motivation, phase-by-phase detail, derivation log, interview talking points). This README is the live status tracker — quick orientation, not the full story.
 
 ## Motivation
@@ -22,7 +24,7 @@ This is explicitly **not** an attempt to demonstrate a profitable trading strate
 | 1 | 1–2 | State-space filter (Kalman → IMM), every parameter derived; baseline filter evaluation; naive-baseline comparison; bipower jump/diffusion split. | **Fully complete** |
 | 2 | 2–4 | Artifact stress test: leaky vs. purged label sets, permutation-derived null, walk-forward validation. | **Core deliverable complete: leakage mechanism demonstrated (p≈10⁻⁶) and real-label signal validated (≈6σ above artifact baseline); cross-window robustness check outstanding** |
 | 3 | 4–6 | Calibration (reliability diagrams, proper scoring rules) and a Bayes-risk decision threshold; cost-aware reality check using the derived spread estimates. | **Complete: five recalibration attempts all failed (honestly documented); Bayes-risk threshold derived and applied to raw probabilities, +48.6% cost reduction vs. naive** |
-| 4 | 6–8 | Stretch: latency/accuracy Pareto frontier under model compression, or cross-asset extension via a GNN. | Not started |
+| 4 | 6–8 | Stretch: model complexity + hardware (Apple Silicon) investigation, redirected from the original compression plan once it became clear there was no winning larger model to compress. | **Complete: no MLP configuration beat logistic regression (9 runs, 3 implementations); real, controlled CPU-vs-MPS crossover measured** |
 
 ## Headline Phase 2 result
 
@@ -38,6 +40,10 @@ Reliability checking found the classifier's raw probabilities systematically und
 
 The Phase 2 leakage-demonstration result was reproduced on an entirely independent event window (FTX, 2022-11): naive k-fold's leakage signature replicated almost identically (20/20 shifts positive, p≈10⁻⁶, same effect size as LUNA), and the real label's genuine signal replicated even more strongly (≈4.0σ/7.4σ above artifact baseline vs. LUNA's ≈3.7σ/6.1σ). This also resolved the open question of whether purged walk-forward's small residual leakage on LUNA (+0.043, 14/20 shifts positive) was real: FTX showed +0.008 with exactly 10/20 shifts positive — a coin flip, consistent with sampling noise rather than a genuine residual leak. Full detail: `notes/cross_window_robustness_check.md`.
 
+## Headline Phase 4 result
+
+Merged 5 independent, disjoint event windows (COVID, May 2021, LUNA, FTX, a calm baseline — 221,450 rows) to test whether a more expressive model (MLP) could outperform the validated logistic regression baseline given genuinely diverse training data. **Across 9 model runs spanning 3 independent implementations (scikit-learn, PyTorch/CPU, PyTorch/Apple Silicon MPS), no MLP configuration beat logistic regression** — a robust, multiply-confirmed negative result. This closed the road to the original compression-study plan (no winning larger model to compress), so the investigation was redirected to a genuinely open question: a controlled PyTorch CPU-vs-MPS comparison revealed a real overhead-vs-compute crossover — MPS is *slower* than CPU for small models (16 units: 1.57x slower) but *faster* for larger ones (64 units: 41% faster), a real, measured piece of latency-engineering judgment rather than an assumed "GPU is always better" claim. Full detail: `notes/phase4_model_complexity_and_hardware.md`.
+
 ## Data
 
 - **Primary:** Binance public spot market data ([data.binance.vision](https://data.binance.vision), [binance/binance-public-data](https://github.com/binance/binance-public-data)), `aggTrades`, BTCUSDT. Freely downloadable, fully redistributable.
@@ -47,11 +53,11 @@ The Phase 2 leakage-demonstration result was reproduced on an entirely independe
 
 Five contiguous 3-month windows chosen to capture actual regime *transitions*, not just periods inside a labeled regime, plus one calm baseline. All 15 monthly files downloaded and checksum-verified.
 
-- 2020-02 → 2020-04 (COVID crash) — downloaded, not yet used
-- 2021-04 → 2021-06 (May 2021 crash) — downloaded, not yet used
+- 2020-02 → 2020-04 (COVID crash) — **used in the Phase 4 combined dataset** (2020-03 specifically)
+- 2021-04 → 2021-06 (May 2021 crash) — **used in the Phase 4 combined dataset** (2021-05 specifically)
 - 2022-04 → 2022-06 (LUNA/UST collapse) — **primary working window**, all Phase 1 and Phase 2 work done here
 - 2022-10 → 2022-12 (FTX collapse) — **used for cross-window robustness check** (2022-11 specifically)
-- 2023-06 → 2023-08 (calm baseline) — **verified calm window derived here** (2023-06-13 → 2023-06-19), used for the R derivation
+- 2023-06 → 2023-08 (calm baseline) — **verified calm window derived here** (2023-06-13 → 2023-06-19), used for the R derivation; 2023-07 also used in the Phase 4 combined dataset
 
 **Note:** Binance SPOT timestamps are in milliseconds before 2025-01-01 and microseconds from 2025-01-01 onward. Any window straddling that boundary needs unit-aware parsing (doesn't affect any window pulled so far).
 
@@ -95,15 +101,18 @@ plots/           generated figures (convention adopted partway through Phase 1;
 - [x] Real and null labels built (null label required two redesigns before it was trustworthy)
 - [x] Leakage mechanism empirically demonstrated: naive k-fold shows overwhelming feature-driven leakage (p≈10⁻⁶); purged walk-forward removes ~8x of it
 - [x] Real-label signal validated against the null-shift-calibrated baseline (≈6σ above artifact-only noise, purged scheme) — Phase 2's core deliverable is complete
-- [ ] Cross-window robustness check (confirm the leakage result isn't LUNA-specific) — tracked in `ISSUES.md`
 - [x] Reliability check on real_label — found systematic underconfidence (up to 8σ) in the 0.05–0.5 range
 - [x] Five recalibration attempts, all rejected, honestly documented (`notes/phase3_calibration_drift.md`)
 - [x] Bayes-risk threshold derived from the Roll spread ratio (p*≈0.097), applied to raw probabilities — 48.6% cost reduction vs. naive p=0.5, validated against the empirical cost curve
 - [x] **Phase 3 complete**
 - [x] Cross-window robustness check (FTX, 2022-11) — leakage signature and real-label signal both replicated; resolved the purged-walk-forward residual question as sampling noise
 - [x] `run_imm_filter.py` updated to canonical K=4 parameters
+- [x] Combined 5-window dataset built (COVID, May 2021, LUNA, FTX, calm baseline) — 221,450 rows, per-window elevated-state derivation bug caught and fixed
+- [x] MLP vs. logistic regression comparison — 9 model runs, 3 implementations, no MLP configuration won (robust negative result)
+- [x] Controlled PyTorch CPU-vs-MPS hardware benchmark — real overhead-vs-compute crossover measured
+- [x] **Phase 4 complete**
 
-See `notes/phase3_bayes_threshold_result.md` for the final Phase 3 write-up. See `ISSUES.md` for tracked open items not currently blocking progress.
+See `notes/phase4_model_complexity_and_hardware.md` for the final Phase 4 write-up. See `ISSUES.md` for tracked open items not currently blocking progress.
 
 ## Non-goals
 
