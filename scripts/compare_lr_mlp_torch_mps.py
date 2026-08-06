@@ -37,6 +37,9 @@ PATIENCE = 10  # early stopping: stop if val loss doesn't improve for this many 
 EPS = 1e-12
 
 DEVICE = torch.device("mps") if torch.backends.mps.is_available() else torch.device("cpu")
+if len(sys.argv) > 1 and sys.argv[1] in ("cpu", "mps"):
+    DEVICE = torch.device(sys.argv[1])
+    print(f"Device forced via CLI argument: {DEVICE}")
 
 
 class MLP(nn.Module):
