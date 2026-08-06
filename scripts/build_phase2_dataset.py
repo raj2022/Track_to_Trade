@@ -28,8 +28,10 @@ from src.imm import run_imm
 K = 4
 N_RESTARTS = 5
 SEED = 0
-ELEVATED_STATES = [2, 3]  # per k4_recheck.py's above-median-variance classification
-H = 60  # derived in scripts/derive_horizon.py (60 steps at dt=60s = 1 hour)
+H = 60  # derived in scripts/derive_horizon.py (60 steps at dt=60s = 1 hour) --
+        # kept fixed across windows deliberately, for apples-to-apples
+        # comparability; the elevated-state SET is re-derived per window
+        # (see build_features_and_imm), only H itself stays constant.
 LABEL_THRESHOLD = 0.5  # natural indifference point, not fitted
 N_NULL_SHIFTS = 20  # number of independent circular-shift nulls to build
 
@@ -44,6 +46,14 @@ def build_features_and_imm(zip_path: Path):
 
     model, ll = fit_best_hmm(returns, K, N_RESTARTS, SEED)
     variances = model.covars_.flatten() * (scale ** 2)
+
+    # Elevated states derived per-window by variance rank (matching
+    # k4_recheck.py's logic), NOT a hardcoded index list -- HMM state
+    # indices are arbitrary per EM fit and are not guaranteed to line up
+    # the same way across different months' data.
+    elevated_states = [s for s in range(K) if variances[s] > np.median(variances)]
+    print(f"Elevated states this window (variance-derived): {elevated_states} "
+          f"of {K} (variances: {np.round(variances, 8).tolist()})")
 
     states = model.predict(returns)
     resampled = df["price"].resample(f"{DT_SEC}s").last().ffill()
@@ -67,7 +77,7 @@ def build_features_and_imm(zip_path: Path):
     result = run_imm(z, Q, R, model.transmat_)
 
     elevated_prob = pd.Series(
-        result.mode_probs[:, ELEVATED_STATES].sum(axis=1), index=index, name="elevated_prob"
+        result.mode_probs[:, elevated_states].sum(axis=1), index=index, name="elevated_prob"
     )
 
     log_ret = log_price.diff()
@@ -171,9 +181,10 @@ def main():
           f"mean={np.mean(null_rates):.3f} (should match real rate -- "
           f"circular shifts preserve the marginal distribution exactly)")
 
-    out_path = DATA_DIR / "phase2_dataset.parquet"
+    out_path = DATA_DIR / f"phase2_dataset_{zip_path.stem}.parquet"
     dataset.to_parquet(out_path)
     print(f"\nSaved to {out_path} ({len(null_labels)} null_label_N columns)")
+    print("(Filename tagged by input window -- different months won't overwrite each other.)")
     print("\nSanity check before trusting this for anything downstream:")
     print("- All null label positive rates should be IDENTICAL to the real rate")
     print("  (circular shift preserves the marginal distribution exactly, unlike")

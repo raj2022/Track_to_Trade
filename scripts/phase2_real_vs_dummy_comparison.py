@@ -19,7 +19,8 @@ DIFFERENCE per shift/scheme -- the difference, not either AUC alone, is
 the number that actually answers "are the features contributing anything."
 
 Usage:
-    python scripts/phase2_real_vs_dummy_comparison.py
+    python scripts/phase2_real_vs_dummy_comparison.py [path_to_dataset.parquet]
+    # defaults to data/processed/phase2_dataset.parquet if omitted
 """
 
 import sys
@@ -35,7 +36,7 @@ from sklearn.metrics import roc_auc_score
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from src.cv_splits import naive_kfold_splits, purged_embargoed_walk_forward_splits
 
-DATA_PATH = Path("data/processed/phase2_dataset.parquet")
+DEFAULT_DATA_PATH = Path("data/processed/phase2_dataset.parquet")
 FEATURE_COLS = ["elevated_prob", "elevated_prob_lag1", "rolling_vol_1h"]
 H = 60
 EMBARGO = 60
@@ -76,10 +77,12 @@ def run_dummy_cv(df, label_col, split_fn, **kwargs):
 
 
 def main():
-    if not DATA_PATH.exists():
-        sys.exit(f"{DATA_PATH} not found -- run scripts/build_phase2_dataset.py first")
+    data_path = Path(sys.argv[1]) if len(sys.argv) > 1 else DEFAULT_DATA_PATH
+    if not data_path.exists():
+        sys.exit(f"{data_path} not found -- run scripts/build_phase2_dataset.py first")
 
-    df = pd.read_parquet(DATA_PATH)
+    df = pd.read_parquet(data_path)
+    print(f"Using dataset: {data_path}\n")
 
     print("=" * 70)
     print("REAL LABEL: does the model add anything beyond trivial recency?")

@@ -1,8 +1,13 @@
 """
-Run the IMM filter on 2022-05, using the per-regime Q/R derived via
-scripts/per_state_R.py and the transition matrix from the BIC-selected
-K=5 HMM fit (scripts/fit_regime_hmm.py) -- all fixed, calibrated inputs,
+Run the IMM filter on 2022-05, using the CANONICAL K=4 per-regime Q/R and
+transition matrix (scripts/k4_recheck.py) -- all fixed, calibrated inputs,
 not re-fit here.
+
+K=4 superseded an earlier K=5 fit: K=5 was BIC-selected but showed a real
+flickering artifact (two states with only a 0.58 mutual self-transition
+probability). K=4 was tested directly against the actual downstream
+persistence result, found comparable-to-better, with a properly sticky
+calmest state (0.9745) -- see notes/k4_naive_bipower_phase1_final_closeout.md.
 
 Usage:
     python scripts/run_imm_filter.py data/raw/BTCUSDT-aggTrades-2022-05.zip
@@ -27,23 +32,22 @@ KNOWN_EVENT_DATE = pd.Timestamp("2022-05-09", tz="UTC")
 
 PLOTS_DIR = Path("plots")
 
-# Regime parameters, state order [0, 1, 2, 3, 4], from per_state_R.py.
-# State 0's R clipped to 0 (raw estimate was -2.73e-12, statistically
-# indistinguishable from zero at n=784k pairs -- see notes).
-Q = np.array([2.327209e-08, 1.730507e-06, 1.001249e-05, 2.061608e-07, 4.791311e-07])
-R = np.array([0.0,          3.003397e-10, 4.530218e-09, 7.573640e-13, 3.619998e-11])
+# Regime parameters, K=4, state order [0, 1, 2, 3], from k4_recheck.py.
+# State 1's R clipped to 0 (raw estimate was near zero at n=4.46M pairs).
+Q = np.array([4.668482e-07, 1.229825e-07, 9.774018e-06, 1.648590e-06])
+R = np.array([4.247151e-11, 0.0,          4.367791e-09, 2.826219e-10])
 
-# Transition matrix from the K=5 HMM fit (fit_regime_hmm.py).
+# Transition matrix from the K=4 HMM fit (k4_recheck.py).
 TRANSITION = np.array([
-    [0.5812, 0.0027, 0.0,    0.3916, 0.0244],
-    [0.0,    0.9568, 0.0120, 0.0,    0.0312],
-    [0.0,    0.0402, 0.9598, 0.0,    0.0],
-    [0.1764, 0.0010, 0.0005, 0.8201, 0.0020],
-    [0.0,    0.0163, 0.0003, 0.0082, 0.9752],
+    [0.9670, 0.0170, 0.0003, 0.0156],
+    [0.0247, 0.9745, 0.0004, 0.0004],
+    [0.0,    0.0,    0.9600, 0.0400],
+    [0.0287, 0.0,    0.0118, 0.9595],
 ])
 
-STATE_LABELS = {0: "calm-thin", 1: "elevated", 2: "extreme", 3: "calm-quiet", 4: "calm-normal"}
-VOLATILE_STATES = [1, 2]  # states worth summing for an "elevated or worse" signal
+# Variance ranks (calm -> volatile): state1 < state0 < state3 < state2.
+STATE_LABELS = {0: "calm", 1: "calmest", 2: "extreme", 3: "elevated"}
+VOLATILE_STATES = [2, 3]  # above-median variance -- "elevated or worse"
 
 
 def load_trades(zip_path: Path) -> pd.DataFrame:
@@ -104,16 +108,19 @@ def main():
     # "elevated or worse" probability persist through the sustained
     # regime, rather than decaying back down within ~a day like the
     # baseline's continuously-adapting Q did?
+    # Reference values from k4_recheck.py's original run: pre=0.165,
+    # during-early=0.842, during-late=0.447 -- rerunning should reproduce
+    # these closely (same data, same fixed parameters, deterministic).
     during = (index >= KNOWN_EVENT_DATE) & (index < KNOWN_EVENT_DATE + pd.Timedelta(days=10))
-    print(f"\nMean P(state in {{1,2}} = elevated/extreme) during 05-09 to 05-19: "
+    print(f"\nMean P(state in {VOLATILE_STATES} = elevated/extreme) during 05-09 to 05-19: "
           f"{volatile_prob[during].mean():.3f}")
     during_early = (index >= KNOWN_EVENT_DATE) & (index < KNOWN_EVENT_DATE + pd.Timedelta(days=4))
     during_late = (index >= KNOWN_EVENT_DATE + pd.Timedelta(days=4)) & (index < KNOWN_EVENT_DATE + pd.Timedelta(days=10))
-    print(f"  split: 05-09 to 05-13: {volatile_prob[during_early].mean():.3f}")
-    print(f"  split: 05-13 to 05-19: {volatile_prob[during_late].mean():.3f}")
+    print(f"  split: 05-09 to 05-13: {volatile_prob[during_early].mean():.3f} (reference: 0.842)")
+    print(f"  split: 05-13 to 05-19: {volatile_prob[during_late].mean():.3f} (reference: 0.447)")
     pre = index < KNOWN_EVENT_DATE
-    print(f"Mean P(state in {{1,2}}) pre-event (05-01 to 05-09): "
-          f"{volatile_prob[pre].mean():.3f}")
+    print(f"Mean P(state in {VOLATILE_STATES}) pre-event (05-01 to 05-09): "
+          f"{volatile_prob[pre].mean():.3f} (reference: 0.165)")
     print("\nCompare this to the baseline filter's finding: a continuously-")
     print("updated Q re-absorbed the anomaly within about a day. Check whether")
     print("this elevated-probability plot instead stays high through the full")
