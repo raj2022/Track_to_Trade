@@ -162,18 +162,38 @@ Phase 1 notes:
 
 Phase 2 notes:
 - `notes/phase2_leakage_stress_test_full_arc.md`
+- `notes/cross_window_robustness_check.md`
 
 Phase 3 notes:
 - `notes/phase3_calibration_drift.md`
 - `notes/phase3_bayes_threshold_result.md`
 
-**Phase 1: fully complete. Phase 2: core deliverable complete. Phase 3: complete.**
+**Phase 1: fully complete. Phase 2: complete, cross-window validated. Phase 3: complete. `ISSUES.md` #1-3 resolved.**
+
+## Cross-window robustness check (post-Phase-3 cleanup)
+
+```bash
+# Build features/labels fresh on an independent event window (FTX, 2022-11).
+# Fixed a real bug in the process: ELEVATED_STATES was hardcoded from May's
+# specific HMM fit and needed to be derived per-window by variance rank
+# instead (state indices are arbitrary per EM run).
+python scripts/build_phase2_dataset.py data/raw/BTCUSDT-aggTrades-2022-11.zip
+# -> data/processed/phase2_dataset_BTCUSDT-aggTrades-2022-11.parquet
+
+# Rerun the real-vs-dummy comparison on the new dataset (now accepts an
+# optional CLI path argument; defaults to the original LUNA dataset).
+python scripts/phase2_real_vs_dummy_comparison.py data/processed/phase2_dataset_BTCUSDT-aggTrades-2022-11.parquet
+# -> naive leakage signature replicated: 20/20 shifts positive (same as LUNA)
+# -> real label signal replicated, slightly stronger: ~4.0/7.4 sigma vs LUNA's ~3.7/6.1
+# -> RESOLVED ISSUES.md #3: purged residual on FTX is +0.008, 10/20 positive
+#    (coin flip) -- LUNA's +0.043 was sampling noise, not a genuine leak
+```
+
+`scripts/run_imm_filter.py` updated to the canonical K=4 parameters
+(`ISSUES.md` #1, resolved) -- verified to run cleanly with the new Q/R/
+transition matrix before handing off.
 
 ## Next commands (not yet run)
 
-- Update `run_imm_filter.py` to the canonical K=4 parameters, or retire it
-- Re-run `build_phase2_dataset.py` / the stress test on another event window
-  (COVID, May 2021, or FTX) to confirm the leakage result isn't LUNA-specific
-- More null shifts (50-100 instead of 20) to tighten the purged walk-forward
-  residual estimate (+0.043, std 0.055) enough to know if it's real
 - Phase 4 (stretch): latency/compression Pareto frontier or GNN cross-asset extension
+- `ISSUES.md` #4, #5, #6 remain open (low priority, optional polish)
