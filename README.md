@@ -20,13 +20,15 @@ This is explicitly **not** an attempt to demonstrate a profitable trading strate
 | Phase | Weeks | Content | Status |
 |---|---|---|---|
 | 1 | 1–2 | State-space filter (Kalman → IMM), every parameter derived; baseline filter evaluation; naive-baseline comparison; bipower jump/diffusion split. | **Fully complete** |
-| 2 | 2–4 | Artifact stress test: leaky vs. purged label sets, permutation-derived null, walk-forward validation. | **Leakage mechanism empirically demonstrated (p≈10⁻⁶); real-label full evaluation and cross-window robustness check outstanding** |
+| 2 | 2–4 | Artifact stress test: leaky vs. purged label sets, permutation-derived null, walk-forward validation. | **Core deliverable complete: leakage mechanism demonstrated (p≈10⁻⁶) and real-label signal validated (≈6σ above artifact baseline); cross-window robustness check outstanding** |
 | 3 | 4–6 | Calibration (reliability diagrams, proper scoring rules) and a Bayes-risk decision threshold; cost-aware reality check using the derived spread estimates. | Not started |
 | 4 | 6–8 | Stretch: latency/accuracy Pareto frontier under model compression, or cross-asset extension via a GNN. | Not started |
 
 ## Headline Phase 2 result
 
-A classifier trained on a label engineered to have **zero true relationship** to its features shows overwhelming apparent skill under naive k-fold cross-validation — every one of 20 independent trials came back positive (p≈10⁻⁶ under a fair-coin null) — and that apparent skill drops by roughly 8x under purged, embargoed walk-forward validation. Getting to this result required diagnosing and fixing two separate broken null-label constructions and a previously-invisible confound (the null label's own autocorrelation being separately exploitable by each CV scheme's mechanics, independent of any feature). Full arc: `notes/phase2_leakage_stress_test_full_arc.md`.
+A classifier trained on a label engineered to have **zero true relationship** to its features shows overwhelming apparent skill under naive k-fold cross-validation — every one of 20 independent trials came back positive (p≈10⁻⁶ under a fair-coin null) — and that apparent skill drops by roughly 8x under purged, embargoed walk-forward validation. Getting to this result required diagnosing and fixing two separate broken null-label constructions and a previously-invisible confound (the null label's own autocorrelation being separately exploitable by each CV scheme's mechanics, independent of any feature).
+
+**Closing the loop:** the same correction was then applied to the *real* label. Its feature-driven signal (purged diff +0.383) sits ≈6σ above the null-shift-calibrated artifact-only baseline — genuine, not just an autocorrelation artifact — while naive CV's inflated version of that same result decomposes almost exactly into real signal (≈0.38) plus naive's own characteristic leakage inflation (≈0.35, matching the null-label baseline). **Phase 2's core deliverable is complete.** Full arc: `notes/phase2_leakage_stress_test_full_arc.md`.
 
 ## Data
 
@@ -84,11 +86,11 @@ plots/           generated figures (convention adopted partway through Phase 1;
 - [x] Label horizon (H) derived from the IMM's own transition matrix via absorbing-Markov-chain sojourn time
 - [x] Real and null labels built (null label required two redesigns before it was trustworthy)
 - [x] Leakage mechanism empirically demonstrated: naive k-fold shows overwhelming feature-driven leakage (p≈10⁻⁶); purged walk-forward removes ~8x of it
-- [ ] Real-label full walk-forward evaluation (as opposed to the null-label stress test)
-- [ ] Cross-window robustness check (confirm the leakage result isn't LUNA-specific)
+- [x] Real-label signal validated against the null-shift-calibrated baseline (≈6σ above artifact-only noise, purged scheme) — Phase 2's core deliverable is complete
+- [ ] Cross-window robustness check (confirm the leakage result isn't LUNA-specific) — tracked in `ISSUES.md`
 - [ ] Calibration and decision-threshold derivation (Phase 3)
 
-See `notes/phase2_leakage_stress_test_full_arc.md` for the full Phase 2 write-up so far.
+See `notes/phase2_leakage_stress_test_full_arc.md` for the full Phase 2 write-up so far. See `ISSUES.md` for tracked open items not currently blocking progress.
 
 ## Non-goals
 
