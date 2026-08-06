@@ -1,5 +1,9 @@
 # Open items
 
+**Project status: all four planned phases complete (see `README.md` /
+`PROJECT_PROPOSAL.md`). Remaining items below (#4-#6) are low-priority,
+optional polish — not blocking.**
+
 Tracked here rather than left implicit in notes/ so nothing gets quietly
 forgotten. Revisit before considering the project "done," not necessarily
 before moving on day to day.
