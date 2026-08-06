@@ -25,9 +25,9 @@ Charged-particle tracking and latent-state estimation in financial time series s
 | Chi-square gate for hit-to-track association, derived from the innovation covariance | Chi-square gate for outlier/regime-change detection, derived from the innovation covariance |
 | Multiple scattering (diffusive noise) vs. hard interaction (discrete energy loss) | Continuous diffusion vs. price jumps (bipower variation) |
 
-This is a legitimate, citable technique, not an invented analogy — Interacting Multiple Model Kalman filter banks are an established approach to regime-switching volatility forecasting in the finance literature. **Now implemented, tested, and revised (Section 6) — the IMM is built, validated on synthetic data, run on the actual 2022-05 LUNA window, and its regime count was itself revisited via a genuine model-selection reversal (K=5 → K=4) once a behavioral problem was found in what BIC alone selected.**
+This is a legitimate, citable technique, not an invented analogy — Interacting Multiple Model Kalman filter banks are an established approach to regime-switching volatility forecasting in the finance literature. The IMM is implemented, tested, and was itself revised via a genuine model-selection reversal (K=5 → K=4) once a behavioral problem was found in what BIC alone selected (Section 6).
 
-The project also carries over a specific failure mode discovered independently, in a different domain: a conditional-generalization failure in HEP analysis, where a classifier exploited artifacts of label construction rather than genuine conditional signal, fixed via matched hypothesis sampling and group-aware validation. The direct financial analogue — classifiers "detecting" regimes by exploiting look-ahead/overlap structure in label construction rather than real market dynamics — is the motivation for purged, embargoed cross-validation (López de Prado, *Advances in Financial Machine Learning*, 2018). Arriving at the same fix independently, from physics, is the project's genuine differentiator: most candidates who know purged CV learned it from the finance literature; this project re-derives the same principle from a structurally identical problem encountered first in particle tracking.
+The project also carries over a specific failure mode discovered independently, in a different domain: a conditional-generalization failure in HEP analysis, where a classifier exploited artifacts of label construction rather than genuine conditional signal, fixed via matched hypothesis sampling and group-aware validation. **This is no longer just a motivating analogy — Phase 2 built the direct financial test of the same failure mode and demonstrated it empirically** (Section 6): a classifier shows overwhelming, statistically unambiguous apparent skill (every one of 20 independent trials positive, p≈10⁻⁶ under a fair-coin null) on a label engineered to carry zero true relationship to its features, when evaluated under naive cross-validation — and that apparent skill collapses by roughly 8x under purged, embargoed walk-forward validation. Arriving at the same underlying fix (purged/embargoed CV) independently, from physics, remains the project's genuine differentiator — this project re-derives the principle from a structurally identical problem encountered first in particle tracking, and then built and ran the actual empirical test most people who cite the principle never construct themselves.
 
 ---
 
@@ -49,7 +49,7 @@ This is the project's organizing constraint, not a stylistic preference. Every p
 
 No threshold is accepted because "it looked right on a plot." Every `notes/` entry documents the derivation, including rejected attempts — see Section 9.
 
-**Two additions worth stating explicitly after Phase 1.** First, the discipline applies to reporting results, not just choosing parameters — the IMM's persistence result decays across its own event window, and that decay is reported alongside the favorable aggregate rather than hidden behind it. Second, it applies to *model-selection criteria themselves*: BIC formally preferred K=5 for the regime count, but that selection was not treated as final once a real behavioral flaw (a flickering, non-sticky state pair) was found in the model it selected — a K=4 alternative was tested directly against the actual downstream result rather than deferring to the metric.
+**Three additions worth stating explicitly after Phase 1 and the Phase 2 stress test.** First, the discipline applies to reporting results, not just choosing parameters — decaying or partial results (the IMM's persistence decay; the purged CV's "mostly, not perfectly, eliminated" leakage residual) are reported as such, not rounded up to cleaner-sounding claims. Second, it applies to model-selection criteria themselves — BIC's K=5 selection was overridden once a behavioral flaw was found. **Third, and new: even a "null" construction — the thing meant to be the trusted reference point for judging everything else — is itself a claim that needs verifying, not a given.** Two null-label constructions failed for diagnosable reasons before a third, correctly-controlled comparison (real model AUC minus a feature-blind dummy baseline) produced a trustworthy result. Nothing in this pipeline is exempt from the same scrutiny, including the tools built specifically to provide scrutiny.
 
 ---
 
@@ -70,7 +70,7 @@ Five contiguous 3-month windows, chosen to capture actual regime *transitions* r
 
 All 15 monthly files downloaded and checksum-verified. Row counts confirmed the expected within-window pattern (event month > its calm neighbors) in every window; cross-window row-count comparisons were explicitly rejected as a volatility proxy, since they're confounded with secular growth in exchange activity over 2020–2023.
 
-**Working window so far:** all Phase 1 derivation and filtering work has been done on 2022-05 (LUNA) and 2023-06 (calm baseline). The other three event windows (COVID, May 2021, FTX) are downloaded but not yet used — a natural robustness check for Phase 2, to confirm the IMM result isn't LUNA-specific.
+**Working window so far:** all Phase 1 and Phase 2 work has been done on 2022-05 (LUNA) and 2023-06 (calm baseline). The other three event windows (COVID, May 2021, FTX) are downloaded but not yet used — a natural robustness check to confirm the leakage-stress-test result isn't LUNA-specific.
 
 ---
 
@@ -78,112 +78,97 @@ All 15 monthly files downloaded and checksum-verified. Row counts confirmed the 
 
 ### Phase 1 (weeks 1–2): Filter, with every parameter derived — **fully complete**
 
-- **Baseline (single-hypothesis) local-level Kalman filter: built, derived, evaluated, and found to fail in a specific, quantified way.**
-  - Q: rolling realized-variance-rate series, dt=60s (validated via a trade-arrival staleness check specific to 2022-05, not assumed from the calm-window value), 1-day trailing window (selected as the shortest window that is stable pre-event while still tracking the LUNA transition; shorter windows were noise-dominated even pre-event, a 3-day window over-smoothed and delayed the visible peak by nearly a week).
-  - R: 3.661×10⁻¹¹, Roll's (1984) estimator, all-tick, on the verified calm window (2023-06-13 → 2023-06-19). See Section 9 for the full derivation chain (rejected signature-plot attempts, arithmetic correction, same-timestamp robustness check).
-  - Chi-square detection gate: derived from the innovation covariance at an explicit target of 1 false alarm/day (α = 6.94×10⁻⁴, threshold = 11.504) — not a stated significance level.
-  - **Result: the baseline is miscalibrated, and not in a way specific to the LUNA event.** Flagged 1.176% of steps against a 0.069% target (~17x over), with pre/during/post-event flag rates of 1.945%/1.476%/0.789% — elevated in *all three* periods, ruling out an event-localized explanation. Two hypotheses were tested to explain the counterintuitive pre > during ordering: warm-up contamination (ruled out) and "pre-event was assumed calm without verification" (confirmed — early May 2022 already ran 2–3x above the verified June baseline). A third finding explained why "during" was lower than the crash's severity would suggest: the trailing 1-day Q re-absorbs a sustained spike into its own baseline within about a day, muting further surprise exactly when persistence would be most valuable. This became the concrete, derivation-backed motivation for the IMM, not just "more sophisticated is better." Full detail: `notes/baseline_filter_evaluation.md`.
+- **Baseline (single-hypothesis) local-level Kalman filter: built, derived, evaluated, and found to fail in a specific, quantified way.** Miscalibrated in all three (pre/during/post) periods around the LUNA event, ruling out an event-specific cause; the mechanism — a trailing 1-day Q re-absorbing a sustained anomaly into its own baseline within about a day — became the concrete motivation for the IMM. Full detail: `notes/baseline_filter_evaluation.md`.
+- **IMM filter: built, tested, and revised via a genuine model-selection reversal.** K=5 initially BIC-selected, but a flickering, non-sticky state pair (self-transition 0.58) was found and diagnosed; a K=4 refit was tested directly against the actual downstream persistence result (not just BIC) and adopted — persistence preserved, calmest state properly sticky (0.9745), clean structural mapping to K=5's other states. Per-regime Q/R derived via Roll's estimator restricted to each state's own tick pairs; regime-conditionality of R tested and confirmed necessary (86.7x higher in crisis).
+- **Naive baseline and bipower jump/diffusion split: built, both yielding genuine findings.** The IMM's complexity was shown to be justified by signal *shape* (a real, stable low-noise baseline state) rather than raw magnitude. The bipower decomposition showed LUNA registered as sustained diffusion, not a discrete jump — direct empirical validation of the IMM's framing for this specific event.
 
-- **IMM (Interacting Multiple Model) filter: built, tested, and revised via a genuine model-selection reversal.**
-  - Number of regimes (K): selected via BIC over a Gaussian HMM fit (EM/Baum-Welch) to 2022-05 returns, K=2..5 tested. K=5 initially selected, but a real EM numerical-instability bug was caught and fixed first (standardizing returns before fitting, confirmed via synthetic recovery), after which K=5's transition matrix revealed a genuine flickering artifact: two low-variance states with only a 0.58 mutual self-transition probability (implied dwell time ~2.4 minutes), rather than the sticky behavior expected of real regimes.
-  - **K=4 recheck (`scripts/k4_recheck.py`), performed rather than accepting K=5's BIC win uncritically:** refit at K=4, compared directly against the K=5 reference on the actual downstream result. Persistence preserved and marginally improved (0.165/0.842/0.447 vs. K=5's 0.159/0.830/0.424), and the calmest K=4 state's self-transition came out properly sticky (0.9745, ~40-minute dwell time). K=4's four states mapped cleanly onto four of K=5's five by variance, with the single calmest K=4 state absorbing the flickering pair — structural, not just summary-statistic, confirmation that the 5th state was an unnecessary split. **K=4 adopted as the model feeding Phase 2**, despite K=5's formally better BIC (91589.59 vs. 92197.93) — BIC alone was not treated as the final word once a real behavioral problem was found in what it selected.
-  - Per-regime Q and R: derived, not asserted, via Roll's estimator restricted to tick pairs whose bins share each state's label (`scripts/per_state_R.py`), with Q_k = HMM_variance_k − 2R_k. One state's raw R came out slightly negative (statistically indistinguishable from zero) and was clipped to 0.
-  - **Unplanned cross-validation:** the independently-derived per-state R for the calmest K=5 state (3.620×10⁻¹¹) landed almost exactly on the original calm-window R (3.661×10⁻¹¹) derived weeks earlier from unrelated data via a completely different method.
-  - Whether R needs to be regime-conditional at all was tested, not assumed: Roll's estimator on the 05-09–05-12 crisis sub-window gave R 86.7x the calm value — large enough that shared-R-across-hypotheses was rejected.
+Full detail: `notes/k4_naive_bipower_phase1_final_closeout.md`.
 
-- **Naive baseline built and honestly compared (`scripts/naive_baseline.py`).** A near-parameter-free rule (1h realized variance above the expanding median of all prior values) was evaluated against the same persistence metric. Raw magnitudes alone would be misleading (a median-crossing rule is mechanically centered near 50% regardless of signal); the honest comparison is the during/pre **ratio** — IMM: 5.2x (early), 2.7x (late); naive: 1.8x (early), 1.1x (late, barely above its own baseline). The naive rule also has no stable pre-event resting state in the plot, oscillating between 0 and 1 throughout. **Conclusion: the IMM's complexity is justified, but by the shape of the signal (a genuine low-noise baseline state to deviate from) rather than by raw magnitude** — a materially different and more defensible claim than "the IMM scores higher."
+### Phase 2 (weeks 2–4): Artifact stress test — the centerpiece, in progress
 
-- **Bipower-variation jump/diffusion decomposition built (`scripts/bipower_jump_diffusion.py`), yielding a genuine substantive finding, not just a completed checklist item.** None of the four LUNA days were flagged as statistically significant jumps (z-stats -0.88 to 1.19, jump shares 0.0–4.8%, against a derived threshold of z=1.849); RV and BV track almost exactly through the event. The month's largest jump signals occurred on unrelated, comparatively ordinary days. **This empirically confirms the LUNA collapse manifested as a sustained regime switch to elevated diffusion, not a discrete jump** — direct evidence that the IMM's framing (competing diffusion-rate hypotheses) was the conceptually correct tool for this event, distinct from what a jump-detection approach would have found. Caveat, not resolved: 9 of 31 days were flagged against a 1/month calibration target, plausibly because the jump test's implicit noise-homogeneity assumption doesn't fully account for the regime-dependent R already established — noted as an open calibration question, though it doesn't undermine the LUNA-specific null finding.
-
-### Phase 2 (weeks 2–4): Artifact stress test — the centerpiece
-
-- Construct a regime/event classifier on top of the filter output (using the K=4 IMM as the feature source).
-- Build two label sets: one with overlapping/look-ahead-contaminated construction (structurally identical to the CERN failure mode — labels carrying no intrinsic conditional signal beyond their construction artifacts), and one cleaned via matched sampling.
-- Formalize with a permutation-derived null: shuffle labels, preserve artifact structure, measure the "predictive power" a model obtains from structure alone. Report model performance relative to this derived null, not as a stated accuracy figure.
-- Apply purged, embargoed cross-validation to remove the leakage.
-- **Revision:** evaluation protocol changed to explicit **walk-forward** validation (expanding or rolling window, always evaluated forward in time) rather than k-fold-with-purging alone — a better fit for a project whose thesis is regime non-stationarity, since it never allows any fold structure to leak a future regime into training, even indirectly.
+- **Label horizon H derived, not asserted.** Treated the IMM's elevated states as transient states of an absorbing Markov chain; computed expected sojourn time via the fundamental matrix, weighted by the quasi-stationary distribution over the elevated set — 54 minutes, rounded to 60 for practical use (`scripts/derive_horizon.py`). Deliberately calibrated to a *typical* elevated episode, not the exceptional multi-day LUNA event, since the classifier trains across the whole dataset.
+- **Real and null labels built** (`scripts/build_phase2_dataset.py`): real label = forward-window mean elevated probability exceeding 0.5 (a natural indifference point); null label = a genuinely fake target with the label's real marginal distribution and autocorrelation structure preserved, but its temporal alignment with the features destroyed.
+- **The null construction itself failed twice, for two distinct, diagnosable reasons, before it could be trusted.** Block permutation introduced a base-rate mismatch artifact (rare positive blocks relocated onto a mostly-low-feature timeline, producing a spurious, large negative bias). A single circular shift then failed differently: this exact dataset has a known ~8h periodicity (discovered back in the Phase 1 Q derivation), and a circular shift can accidentally realign with real periodic structure, producing large, direction-inconsistent spurious effects. The final method — many circular shifts, explicitly excluding offsets near the known periods — resolved this.
+- **A third, previously invisible confound was found and diagnosed via a decisive control.** Even with a clean null, purged walk-forward showed a consistent positive AUC bias across all 20 shifts while naive k-fold was noisy and near chance — backwards from the leakage hypothesis. A feature-blind dummy classifier (predicting only the training fold's class prior) reproduced this same pattern almost exactly, proving the bias was driven entirely by the label's own autocorrelation interacting with each CV scheme's mechanics (a structural, mathematically explicable anti-correlation bias in leave-block-out k-fold; a structural pro-correlation bias in expanding-window walk-forward), not by the features at all.
+- **Corrected, decisive result** (`scripts/phase2_real_vs_dummy_comparison.py`): comparing real model AUC minus the dummy baseline, per shift, isolates the genuinely feature-driven effect. **Naive k-fold: +0.349 mean, 20/20 shifts positive (p≈10⁻⁶ under a fair-coin null) — overwhelming, unambiguous leakage.** **Purged walk-forward: +0.043 mean, std 0.055, 14/20 shifts positive (p≈0.04) — the large majority of the leakage effect is removed (~8x reduction), but the honest conclusion is "mostly eliminated," not "proven exactly zero."** Full arc: `notes/phase2_leakage_stress_test_full_arc.md`.
+- **Why this mattered methodologically:** the raw, uncorrected AUC comparison from the first run of this test would have supported the *opposite*, wrong conclusion (naive k-fold's raw AUC of ~0.48 looked like "no leakage," when in fact a large positive leakage effect was being masked by an unrelated negative structural bias in the same scheme). Only building a proper feature-blind control — itself only necessary because two earlier null constructions had already failed — uncovered the true, correctly-isolated effect.
+- **Not yet started:** the leaky-vs-purged label sets on the *real* label specifically (as opposed to the null-label stress test above), the full walk-forward evaluation of real-label predictive performance, and confirming this result isn't LUNA-specific using the other downloaded event windows.
 
 ### Phase 3 (weeks 4–6): Calibration and decision theory
 
 - Convert the filter's regime posterior into a genuinely calibrated probability: reliability diagrams, proper scoring rules (log score, CRPS), evaluated walk-forward.
 - Derive the decision threshold from an explicit asymmetric cost matrix (Bayes risk) rather than defaulting to 0.5 — directly targeting the project's stated calibration weakness.
-- **Cost-aware reality check.** Take the Roll-implied effective spread already derived in Phase 1 (0.121bp calm / 1.127bp crisis) plus Binance's published taker fee, and ask whether a signal at the derived Bayes-optimal threshold would clear round-trip costs. This is explicitly *not* a backtest or a profitability claim — it's a single, honest question: is the signal even in the right order of magnitude to matter once realistic frictions are included, using cost inputs the project already derived rather than assumed.
+- **Cost-aware reality check.** Take the Roll-implied effective spread already derived in Phase 1 (0.121bp calm / 1.127bp crisis) plus Binance's published taker fee, and ask whether a signal at the derived Bayes-optimal threshold would clear round-trip costs. This is explicitly *not* a backtest or a profitability claim.
 
 ### Phase 4 (weeks 6–8, stretch — pick one)
 
-- **Latency/accuracy Pareto frontier**, applying model-compression and CUDA background to quantify the accuracy cost of low-latency inference — directly relevant to market-making firms specifically, and a differentiator few other candidates will bring.
-- **Cross-asset extension via a GNN**, propagating regime information across a small correlated basket, testing whether cross-asset signals survive the same artifact stress test as the single-asset case.
+- **Latency/accuracy Pareto frontier**, applying model-compression and CUDA background to quantify the accuracy cost of low-latency inference.
+- **Cross-asset extension via a GNN**, propagating regime information across a small correlated basket.
 
 ---
 
 ## 7. Explicit non-goals
 
-- No claim of discovered alpha or a profitable trading strategy. Public data over a 6–8 week project is not evidence of exploitable edge, and claiming otherwise would signal a misunderstanding of market efficiency and multiple-testing risk, not a result.
-- No full portfolio construction (covariance estimation, factor risk, exposure neutralization). Deliberately out of scope — the project's contribution sits upstream of portfolio construction, in signal identifiability. Stated explicitly rather than attempted shallowly.
-- No claim that Roll-implied spread equals the exchange's displayed quoted spread — it's an implied *effective* spread from aggregate trade prices, and the write-up says so.
-- No claim that the jump-test's day-count calibration is fully resolved — the 9-vs-1 overshoot is reported as an open question, not smoothed over.
+- No claim of discovered alpha or a profitable trading strategy.
+- No full portfolio construction. Deliberately out of scope — stated explicitly rather than attempted shallowly.
+- No claim that Roll-implied spread equals the exchange's displayed quoted spread.
+- No claim that purged walk-forward eliminates leakage completely — the residual +0.043 effect (std 0.055, 14/20 shifts positive) is reported as a real, unresolved, mostly-but-not-entirely-eliminated finding.
+- No claim that the jump-test's day-count calibration is fully resolved (9-vs-1 overshoot, Phase 1).
 
 ---
 
 ## 8. Checklist audit (against current industry guidance)
 
-A practicing quant researcher's advice was checked against the existing plan rather than treated as a new plan:
-
 | Area | Status |
 |---|---|
-| Non-stationarity, walk-forward validation, structural breaks, multiple-testing bias | Core content of Phase 2; evaluation scheme revised to explicit walk-forward |
+| Non-stationarity, walk-forward validation, structural breaks, multiple-testing bias | Core content of Phase 2, now with an empirically demonstrated leakage result, not just a described methodology |
 | Microstructure (spreads, noise, order flow) | Substantial — Roll estimator, signature-plot failure diagnosis, staleness/sweep robustness checks, per-regime R decomposition |
-| Realistic backtesting (costs, leakage, overlapping labels) | Leakage: core to Phase 2. Costs: added in Phase 3 via the cost-aware reality check, now with both calm and crisis spread estimates. No full backtest attempted — flagged as a deliberate boundary, not a gap. |
-| Implementation | Python/NumPy/pandas, PyTorch, JAX — matches existing background |
+| Realistic backtesting (costs, leakage, overlapping labels) | Leakage: empirically demonstrated and quantified in Phase 2. Costs: planned for Phase 3. No full backtest attempted — flagged as a deliberate boundary. |
+| Implementation | Python/NumPy/pandas, PyTorch, JAX, scikit-learn |
 | Portfolio construction and risk | Explicitly out of scope (Section 7), with reasoning stated |
-| Finance fundamentals | Covered at the depth needed for spot crypto microstructure; not pursued further, consistent with targeting research roles rather than derivatives/pricing roles |
-| Baseline before complex model | Built and honestly compared — the IMM's complexity is justified by signal shape, not raw magnitude (Section 6) |
-| Document failed hypotheses | Already the operating discipline — see Section 9 |
+| Finance fundamentals | Covered at the depth needed for spot crypto microstructure |
+| Baseline before complex model | Built and honestly compared (Phase 1); the feature-blind dummy classifier in Phase 2 serves the same role again, at a deeper level |
+| Document failed hypotheses | Already the operating discipline — see Section 9, now including two failed null constructions |
 
 ---
 
 ## 9. Derivation log (summary — full detail in `notes/`)
 
-- **Calm-window selection:** first attempt (2022-04) rejected — outlier trimming excluded 0 of 30 days because April is a gradual pre-crash ramp, not two separable calm/spike populations; lowering the trim threshold to force a split was considered and rejected as p-hacking the outlier filter. Fell back to 2023-06, which trimmed cleanly and yielded the verified calm window 2023-06-13 → 2023-06-19.
-- **Signature plot (R, attempts 1–2):** rejected — pooling a calm period and the LUNA crash conflated regime-invariant noise with regime-dependent variance, and a stale-price artifact (44.7% of 1s bins stale) invalidated short-interval reads even on the verified calm window.
-- **R (final method):** Roll's estimator on tick-level returns. Arithmetic sanity-check error caught and corrected independently. Same-timestamp order-book-sweep contamination quantified (+11.9% shift) and resolved via an explicit "what does the filter ingest" argument.
-- **Q (rolling, 2022-05):** dt re-validated for this specific month; window length chosen by bias/variance logic; a hypothesized ~24h diurnal explanation for residual noise was tested and *ruled out* by ACF, replaced by an unexplained ~8h periodicity (tentatively linked to funding settlement, unconfirmed).
-- **Baseline filter evaluation:** miscalibration found in all three periods, ruling out an event-specific cause; two competing explanations for a counterintuitive result ordering tested directly (one ruled out, one confirmed); trailing-Q self-adaptation identified as the mechanism muting persistence during the crash itself.
-- **HMM regime fit:** K initially selected by BIC (K=5). A real EM numerical-instability bug caught via the library's own warnings, diagnosed and fixed by standardizing before fitting.
-- **K=4 recheck:** BIC's K=5 selection was not treated as final once a behavioral flaw (flickering, non-sticky state pair) was found. K=4 tested directly against the actual downstream persistence result, found comparable-to-better, with a properly sticky calmest state and a clean structural mapping to K=5's other states. K=4 adopted despite the formally worse BIC.
-- **Per-regime R:** derived separately for each state via tick-pair restriction. One state's R clipped from a small negative value to 0. Unplanned cross-validation against the original calm-window R fell out of this work.
-- **IMM result:** validated on synthetic data before real use. On real data, a genuine decay (0.830 → 0.424 under K=5) was found and reported alongside the more favorable aggregate, not in place of it.
-- **Naive baseline:** raw magnitude comparison would have been misleading (median-crossing rules are mechanically centered near 50%); the during/pre ratio was used instead, and the naive rule's lack of a stable pre-event state was identified as the real reason the IMM's complexity is justified.
-- **Bipower jump/diffusion split:** found LUNA registered as sustained diffusion, not a statistical jump — a genuine, unanticipated finding, not just a completed derivation. A real 9-vs-1 calibration overshoot was flagged as unresolved rather than glossed over.
+- **Calm-window selection, R derivation, Q derivation, baseline filter evaluation, HMM fit, K=4 recheck, naive baseline, bipower split:** see Phase 1 entries, summarized in prior sections and fully detailed in `notes/`.
+- **Label horizon H:** derived via absorbing-Markov-chain expected sojourn time in the IMM's elevated state set, weighted by the quasi-stationary distribution — not a naive average of individual states' self-transition-implied dwell times, which would have ignored the fact that one state is only reachable/exitable through the other.
+- **Null label, attempt 1 (block permutation):** rejected — real-data AUCs ~15-17 std below chance in both CV schemes, traced to a base-rate mismatch from relocating rare positive blocks onto a mostly-low-feature timeline.
+- **Null label, attempt 2 (single circular shift):** rejected — real-data AUCs in opposite directions (0.285 vs. 0.593) on a single draw, traced to accidental realignment with the dataset's known ~8h periodicity (a direct callback to the Phase 1 diurnal check).
+- **Null label, final method (many shifts, period-excluded):** adopted, reporting a distribution across 20 shifts rather than trusting any single draw.
+- **The label-autocorrelation CV-structural confound:** discovered because the corrected null's results still didn't match the leakage hypothesis (purged showing consistent bias, naive showing none) — diagnosed via a feature-blind dummy-classifier control rather than accepted at face value, revealing a genuine, mathematically explicable bias in each CV scheme's mechanics, orthogonal to any feature relationship.
+- **Final, confound-corrected leakage result:** real-model-AUC-minus-dummy-AUC per shift. Naive k-fold: 20/20 shifts positive (p≈10⁻⁶). Purged walk-forward: 14/20 shifts positive (p≈0.04), mean smaller than its own std — reported as "mostly eliminated," not "proven zero."
 
 ---
 
 ## 10. Deliverables
 
 - Public GitHub repository (`Track_to_Trade`), MIT- or similarly-licensed, fully reproducible from the download scripts.
-- `notes/`: a derivation log for every threshold in the project, in the format demonstrated above — question, method, rejected attempts, result, reproduction command.
+- `notes/`: a derivation log for every threshold in the project, including rejected attempts — now including two rejected null-label constructions and their diagnoses.
 - `plots/`: all generated figures, referenced from `notes/`.
-- `src/kalman.py`, `src/imm.py`: the filter implementations, unit-validated against synthetic data with known ground truth before being pointed at real data, in both cases.
-- A technical write-up in the style of an internal quant research note: the core question, the artifact-robustness result, and an honest identifiability boundary — not a paper, not a pitch deck.
+- `src/kalman.py`, `src/imm.py`, `src/cv_splits.py`: implementations, unit/synthetic-validated before use on real data in every case.
+- A technical write-up in the style of an internal quant research note.
 
 ## 11. Timeline
 
 | Weeks | Milestone | Status |
 |---|---|---|
 | 1–2 | Phase 1: filter + all derived parameters + baseline model + jump/diffusion split | **Fully complete** |
-| 2–4 | Phase 2: artifact stress test, walk-forward validation | Not started |
+| 2–4 | Phase 2: artifact stress test, walk-forward validation | **Leakage mechanism empirically demonstrated and quantified; real-label full evaluation and cross-window robustness check still outstanding** |
 | 4–6 | Phase 3: calibration, decision threshold, cost-aware check | Not started |
 | 6–8 | Phase 4 (stretch): latency/compression Pareto frontier or GNN cross-asset extension | Not started |
 
 ## 12. What a 45-minute interview conversation looks like
 
 Anticipated probes and where the project answers them:
-- *"How do you know your regime detector isn't just overfitting the backtest?"* → Phase 2 is built specifically to answer this.
+- *"How do you know your regime detector isn't just overfitting the backtest?"* → the Phase 2 leakage stress test doesn't just describe the fix, it demonstrates the failure and the fix empirically, with a p≈10⁻⁶ result.
 - *"Why should I trust this threshold?"* → every threshold traces to a derivation in `notes/`, walkable on a whiteboard.
 - *"Did you find alpha?"* → no, and the reasoning for why that claim would be dishonest at this scope is itself part of the answer.
-- *"Why does a particle physicist think this transfers?"* → the chi-square gate, concrete and mechanistic rather than a loose analogy.
-- *"Walk me through a time your first approach was wrong."* → the April calm-window rejection, the inverted May signature plot, or the baseline filter's miscalibration.
-- *"Walk me through a model-selection decision you second-guessed."* → the K=5 → K=4 reversal — BIC formally preferred K=5, but a behavioral check (a non-sticky, flickering state pair) overrode it, and the reversal was validated on the actual downstream result rather than asserted.
-- *"How do you know your added complexity is worth it?"* → the naive-baseline comparison, and specifically the honest observation that raw magnitude comparison would have been the wrong metric — the real justification was the shape of the signal, not the size.
-- *"Tell me about a result that surprised you."* → the bipower decomposition showing LUNA was diffusion, not a jump — an unanticipated, genuinely informative finding that also validated the project's core methodological choice.
-- *"How did you catch a bug in your own model-fitting code?"* → the EM non-convergence warnings, diagnosed to input-scale precision loss and fixed via standardization, confirmed on synthetic data before trusting the real fit again.
+- *"Walk me through a time your first approach was wrong."* → several candidates now, including two consecutive null-label construction failures in Phase 2 alone.
+- *"Walk me through a model-selection decision you second-guessed."* → the K=5 → K=4 reversal, or the two null-construction rejections in Phase 2.
+- *"Tell me about a result that surprised you and how you resolved it."* → the label-autocorrelation CV-structural confound — purged walk-forward showing a *consistent* bias where naive k-fold showed none, the opposite of the hypothesis, resolved via a feature-blind dummy-classifier control rather than force-fit into the expected story.
+- *"How do you know your added complexity is worth it?"* → the naive-baseline comparison (Phase 1) and, at a deeper level, the dummy-classifier control in Phase 2.
+- *"What's a result you have to report with a caveat?"* → the purged walk-forward's residual leakage (+0.043, std 0.055) — mostly but not conclusively eliminated, reported honestly rather than rounded up.
