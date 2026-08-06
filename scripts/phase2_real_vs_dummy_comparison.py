@@ -80,6 +80,33 @@ def main():
         sys.exit(f"{DATA_PATH} not found -- run scripts/build_phase2_dataset.py first")
 
     df = pd.read_parquet(DATA_PATH)
+
+    print("=" * 70)
+    print("REAL LABEL: does the model add anything beyond trivial recency?")
+    print("=" * 70)
+    y_true, pred_real, _ = run_real_cv(df, "real_label", naive_kfold_splits, n_splits=30)
+    real_auc_naive = roc_auc_score(y_true, pred_real)
+    y_true, pred_dummy, _ = run_dummy_cv(df, "real_label", naive_kfold_splits, n_splits=30)
+    dummy_auc_naive = roc_auc_score(y_true, pred_dummy)
+
+    y_true, pred_real, _ = run_real_cv(df, "real_label", purged_embargoed_walk_forward_splits, h=H, embargo=EMBARGO)
+    real_auc_purged = roc_auc_score(y_true, pred_real)
+    y_true, pred_dummy, _ = run_dummy_cv(df, "real_label", purged_embargoed_walk_forward_splits, h=H, embargo=EMBARGO)
+    dummy_auc_purged = roc_auc_score(y_true, pred_dummy)
+
+    print(f"\n{'':>20}  {'naive_kfold':>15}  {'purged_walk_forward':>20}")
+    print(f"{'real model AUC':>20}  {real_auc_naive:>15.4f}  {real_auc_purged:>20.4f}")
+    print(f"{'dummy (prior) AUC':>20}  {dummy_auc_naive:>15.4f}  {dummy_auc_purged:>20.4f}")
+    print(f"{'diff (real-dummy)':>20}  {real_auc_naive - dummy_auc_naive:>+15.4f}  "
+          f"{real_auc_purged - dummy_auc_purged:>+20.4f}")
+    print("\nIf the diff is small here too, the ~0.91 raw AUC on real_label is mostly")
+    print("(or entirely) explained by trivial recency/autocorrelation -- the SAME")
+    print("caution that applied to the null label's raw numbers applies here. Report")
+    print("this diff, not the raw 0.91, as the actual measure of feature-driven skill.")
+
+    print("\n" + "=" * 70)
+    print("NULL LABELS: leakage stress test (as before)")
+    print("=" * 70)
     null_cols = sorted(c for c in df.columns if c.startswith("null_label_"))
     print(f"Comparing real vs. dummy classifier across {len(null_cols)} null shifts...\n")
 
