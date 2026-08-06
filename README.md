@@ -34,6 +34,10 @@ A classifier trained on a label engineered to have **zero true relationship** to
 
 Reliability checking found the classifier's raw probabilities systematically underconfident in the ~0.05–0.5 range (up to 8σ off). **Five separate recalibration attempts** — static time split, static regime split, walk-forward isotonic regression (both expanding and rolling window), walk-forward Platt scaling — **all failed** to produce a robust fix, a genuine and instructive negative result documented in full rather than papered over. Decision: proceed with raw probabilities, stating the limitation explicitly. The Bayes-risk decision threshold (p*≈0.097, derived from the Roll spread ratio established in Phase 1) was then applied to raw probabilities and reduced mean expected cost by **48.6%** versus the naive p=0.5 cutoff — and its empirical cost-minimizing threshold landed close to the theoretically derived one despite the documented miscalibration, a real if imperfect validation. Full arc: `notes/phase3_calibration_drift.md`, `notes/phase3_bayes_threshold_result.md`.
 
+## Cross-window robustness: confirmed
+
+The Phase 2 leakage-demonstration result was reproduced on an entirely independent event window (FTX, 2022-11): naive k-fold's leakage signature replicated almost identically (20/20 shifts positive, p≈10⁻⁶, same effect size as LUNA), and the real label's genuine signal replicated even more strongly (≈4.0σ/7.4σ above artifact baseline vs. LUNA's ≈3.7σ/6.1σ). This also resolved the open question of whether purged walk-forward's small residual leakage on LUNA (+0.043, 14/20 shifts positive) was real: FTX showed +0.008 with exactly 10/20 shifts positive — a coin flip, consistent with sampling noise rather than a genuine residual leak. Full detail: `notes/cross_window_robustness_check.md`.
+
 ## Data
 
 - **Primary:** Binance public spot market data ([data.binance.vision](https://data.binance.vision), [binance/binance-public-data](https://github.com/binance/binance-public-data)), `aggTrades`, BTCUSDT. Freely downloadable, fully redistributable.
@@ -46,7 +50,7 @@ Five contiguous 3-month windows chosen to capture actual regime *transitions*, n
 - 2020-02 → 2020-04 (COVID crash) — downloaded, not yet used
 - 2021-04 → 2021-06 (May 2021 crash) — downloaded, not yet used
 - 2022-04 → 2022-06 (LUNA/UST collapse) — **primary working window**, all Phase 1 and Phase 2 work done here
-- 2022-10 → 2022-12 (FTX collapse) — downloaded, not yet used
+- 2022-10 → 2022-12 (FTX collapse) — **used for cross-window robustness check** (2022-11 specifically)
 - 2023-06 → 2023-08 (calm baseline) — **verified calm window derived here** (2023-06-13 → 2023-06-19), used for the R derivation
 
 **Note:** Binance SPOT timestamps are in milliseconds before 2025-01-01 and microseconds from 2025-01-01 onward. Any window straddling that boundary needs unit-aware parsing (doesn't affect any window pulled so far).
@@ -55,7 +59,7 @@ Five contiguous 3-month windows chosen to capture actual regime *transitions*, n
 
 The IMM was first fit at K=5 (BIC-selected) but showed a real flickering artifact between two low-variance states (self-transition 0.58). A K=4 recheck resolved this cleanly — persistence result preserved (marginally improved), calmest state's self-transition properly sticky (0.9745), and a clean structural mapping from K=5's other four states. **K=4 is the model that feeds Phase 2.**
 
-`scripts/run_imm_filter.py` still contains the retired K=5 parameters as hardcoded constants — not yet updated. Use `scripts/k4_recheck.py`'s output as the canonical filter run until that script is updated or replaced.
+`scripts/run_imm_filter.py` has been updated to the canonical K=4 parameters (previously ran on retired K=5 constants — see `ISSUES.md` #1, resolved).
 
 ## Repository layout
 
@@ -96,6 +100,8 @@ plots/           generated figures (convention adopted partway through Phase 1;
 - [x] Five recalibration attempts, all rejected, honestly documented (`notes/phase3_calibration_drift.md`)
 - [x] Bayes-risk threshold derived from the Roll spread ratio (p*≈0.097), applied to raw probabilities — 48.6% cost reduction vs. naive p=0.5, validated against the empirical cost curve
 - [x] **Phase 3 complete**
+- [x] Cross-window robustness check (FTX, 2022-11) — leakage signature and real-label signal both replicated; resolved the purged-walk-forward residual question as sampling noise
+- [x] `run_imm_filter.py` updated to canonical K=4 parameters
 
 See `notes/phase3_bayes_threshold_result.md` for the final Phase 3 write-up. See `ISSUES.md` for tracked open items not currently blocking progress.
 
