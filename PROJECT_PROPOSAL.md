@@ -2,6 +2,8 @@
 ### Identifiability and Artifact-Robustness in Latent-State Financial Filtering
 **Project proposal**
 
+**Status: all four planned phases complete.**
+
 ---
 
 ## 1. One-line thesis
@@ -109,10 +111,15 @@ Full detail: `notes/k4_naive_bipower_phase1_final_closeout.md`.
 - **Result:** mean expected cost reduced 48.6% versus the naive p=0.5 cutoff (0.4317 vs. 0.8405 per step), trading a large increase in false positives (1,984→9,209) for a large decrease in false negatives (3,680→1,011) — the correct direction under the derived ~9.3x cost asymmetry. **The empirical cost-minimizing threshold, swept independently across all possible thresholds, landed close to the theoretically derived p* despite the documented miscalibration** — a real, if imperfect, validation that the derivation held up under real data. Full result: `notes/phase3_bayes_threshold_result.md`.
 - **Explicitly not a backtest or profitability claim** — a decision-theoretic result under a stated cost model, consistent with the project's non-goals throughout.
 
-### Phase 4 (weeks 6–8, stretch — pick one)
+### Phase 4 (weeks 6–8, stretch) — **complete: model complexity + hardware investigation**
 
-- **Latency/accuracy Pareto frontier**, applying model-compression and CUDA background to quantify the accuracy cost of low-latency inference.
-- **Cross-asset extension via a GNN**, propagating regime information across a small correlated basket.
+The original plan (compress a larger, winning model to quantify a latency/accuracy Pareto frontier, applying CUDA-era model-compression experience) needed a winning larger model as its subject. It was tested honestly rather than assumed:
+
+- **Built a genuinely diverse, 5-window combined dataset** — COVID crash (2020-03), May 2021 crash (2021-05), LUNA (2022-05), FTX (2022-11), and a calm baseline (2023-07), refitting the K=4 IMM fresh per window rather than reusing LUNA's fit. 221,450 rows total. One real bug caught in the process: `ELEVATED_STATES` had been hardcoded from LUNA's specific HMM fit — state indices are arbitrary per independent EM run, so this needed deriving per-window by variance rank instead, the same logic already used in `k4_recheck.py`.
+- **Compared logistic regression against MLPs (16/32/64 hidden units) across three independent implementations** (scikit-learn, PyTorch/CPU, PyTorch/Apple Silicon MPS — this machine has Metal, not CUDA, so the hardware comparison was scoped to what could actually be measured rather than an assumed CUDA number) — same purged/embargoed walk-forward discipline as every other evaluation in the project, testing whether more diverse data gave a more expressive model room to earn its complexity.
+- **Result: no MLP configuration, across 9 total model runs, beat the logistic regression baseline.** A robust, multiply-confirmed negative result — added complexity did not earn its keep even with 5x more data spanning genuinely diverse regimes. This closed the road to the original compression plan, since there was no winning larger model to compress.
+- **Redirected to a genuinely open, answerable question instead: does GPU acceleration matter for this problem's shape?** A controlled comparison (identical PyTorch code, only the device differs) found a real overhead-vs-compute crossover: MPS is *slower* than CPU for the smallest model (16 units: 1.57x slower — GPU transfer/kernel-launch overhead dominates at this scale) but *faster* for the largest (64 units: 41% faster — compute cost outweighs overhead). A genuine, measured piece of latency-engineering judgment, not an assumed "GPU is always better" claim.
+- Full detail: `notes/phase4_model_complexity_and_hardware.md`.
 
 ---
 
@@ -125,6 +132,7 @@ Full detail: `notes/k4_naive_bipower_phase1_final_closeout.md`.
 - No claim that the jump-test's day-count calibration is fully resolved (9-vs-1 overshoot, Phase 1).
 - No claim that raw probabilities are well-calibrated — five recalibration attempts all failed, and the known miscalibrated range is stated as an explicit limitation on the Phase 3 Bayes threshold result rather than hidden.
 - No claim that the Phase 3 cost-reduction figure (+48.6%) represents realized profitability — it is a decision-theoretic result under an explicit, derived cost model, not a backtest.
+- No claim that PyTorch's lower MLP accuracy numbers (vs. scikit-learn's) reflect a genuine framework difference in model capacity — most likely a training-procedure artifact (optimizer, early-stopping criterion, no fixed cross-device seed), noted rather than over-interpreted.
 
 ---
 
@@ -156,6 +164,8 @@ Full detail: `notes/k4_naive_bipower_phase1_final_closeout.md`.
 - **Reliability check:** found systematic underconfidence in the purged-walk-forward `real_label` predictions across ~0.05–0.5 predicted probability, up to 8σ off per bin — real and consistent, invisible on the plot alone, only visible via the per-bin standard error.
 - **Recalibration, five attempts, all rejected:** static time split (made things worse, opposite-direction bias); static regime split (worse in both regimes, refuting the regime hypothesis); walk-forward isotonic, expanding and rolling window (neither improved real-data results); walk-forward Platt scaling (worked on synthetic drift data, did not clearly work on real data). Decision to proceed with raw probabilities made explicitly, after exhausting both plausible fix axes (split scheme, calibrator flexibility), rather than continuing to search indefinitely.
 - **Bayes-risk threshold:** derived from the Roll spread ratio (crisis/calm ≈ 9.31) rather than asserting a cost matrix, giving p*≈0.097. Validated post hoc against an independently swept empirical cost curve — the theoretical and empirical optima landed close together despite the known miscalibration in that region.
+- **Cross-window robustness (FTX):** naive k-fold's leakage signature and the real label's genuine signal both replicated on an independent window, refitting every parameter fresh. Resolved the LUNA purged-walk-forward residual as sampling noise (FTX: exactly 10/20 shifts positive, a coin flip). Caught and fixed a real generalization bug (`ELEVATED_STATES` hardcoded from one window's HMM fit).
+- **Phase 4 model-complexity test:** 9 model runs (3 architectures × 3 implementations) on a genuinely diverse 5-window dataset, all losing to logistic regression — a robust negative result rather than a search for a configuration that wins. The controlled CPU-vs-MPS hardware comparison (identical code, device-only difference) is itself a small derivation: don't assume GPU acceleration helps, measure the actual overhead-vs-compute crossover for the specific problem shape.
 
 ---
 
@@ -175,7 +185,7 @@ Full detail: `notes/k4_naive_bipower_phase1_final_closeout.md`.
 | 1–2 | Phase 1: filter + all derived parameters + baseline model + jump/diffusion split | **Fully complete** |
 | 2–4 | Phase 2: artifact stress test, walk-forward validation | **Complete: leakage mechanism demonstrated, real-label signal validated, and both replicated on an independent event window (FTX)** |
 | 4–6 | Phase 3: calibration, decision threshold, cost-aware check | **Complete: five recalibration attempts honestly documented and rejected; Bayes-risk threshold derived and validated, +48.6% cost reduction vs. naive** |
-| 6–8 | Phase 4 (stretch): latency/compression Pareto frontier or GNN cross-asset extension | Not started |
+| 6–8 | Phase 4 (stretch): model complexity + hardware investigation, redirected from the original compression plan | **Complete: no MLP beat logistic regression (9 runs, 3 implementations); real CPU-vs-MPS crossover measured** |
 
 ## 12. What a 45-minute interview conversation looks like
 
@@ -190,3 +200,5 @@ Anticipated probes and where the project answers them:
 - *"What's a result you have to report with a caveat?"* → the purged walk-forward's residual leakage (+0.043, std 0.055), or the Phase 3 Bayes threshold applied to known-imperfect raw probabilities — both reported honestly rather than rounded up.
 - *"When did you decide to stop trying to fix something?"* → the calibration saga — five attempts across two plausible fix axes, then a deliberate decision to proceed with a documented limitation rather than keep searching for a variant that happens to work on one month of data.
 - *"How do you know your central result generalizes, not just fits one crisis?"* → the FTX cross-window replication — same leakage signature, same order of magnitude, on a structurally different event, refitting every parameter fresh rather than reusing LUNA's.
+- *"Tell me about a time you had to abandon your original plan mid-project."* → Phase 4 — the compression study needed a winning larger model, and there wasn't one after honest testing; redirected to a real, controlled hardware benchmark instead of forcing the original plan onto a negative result.
+- *"What's a real engineering judgment call, not just a research finding, that came out of this project?"* → the CPU-vs-MPS overhead-vs-compute crossover — GPU acceleration isn't automatically better, and knowing the crossover point for a given workload shape is genuine latency-engineering judgment, measured rather than assumed.
