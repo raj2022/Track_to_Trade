@@ -4,32 +4,43 @@ Tracked here rather than left implicit in notes/ so nothing gets quietly
 forgotten. Revisit before considering the project "done," not necessarily
 before moving on day to day.
 
-## #1 — `run_imm_filter.py` still hardcodes the retired K=5 parameters
-**Status:** open
-**Priority:** medium (cosmetic/correctness risk, not blocking)
-Update to the K=4 parameters (`k4_recheck.py`'s output), or retire the
-script in favor of `k4_recheck.py` being the canonical filter runner.
-Risk: anyone (including future-you) rerunning it unmodified silently
-reproduces the superseded model.
+## ~~#1 — `run_imm_filter.py` still hardcodes the retired K=5 parameters~~ RESOLVED
+**Status:** ~~open~~ **closed — fixed**
+**Priority:** ~~medium~~ n/a
+~~Update to the K=4 parameters... Risk: anyone rerunning it unmodified
+silently reproduces the superseded model.~~
+Updated to the canonical K=4 Q/R/transition matrix from `k4_recheck.py`'s
+actual output. Verified the parameters run cleanly through `src/imm.py`
+(correct shape, well-formed mode probabilities, no NaNs) before handing
+off. Print statements now reference the expected K=4 persistence values
+(0.165/0.842/0.447) so a rerun can be checked against them directly.
 
-## #2 — Cross-window robustness check
-**Status:** open
-**Priority:** high
-All Phase 1 and Phase 2 work has been done exclusively on 2022-05 (LUNA).
-Three other event windows are already downloaded and checksum-verified
-(COVID 2020-02/04, May 2021 crash, FTX 2022-10/12) but unused. Rerun the
-Phase 2 leakage stress test (or at minimum the real-vs-dummy comparison)
-on at least one other window to confirm the leakage-demonstration result
-isn't an artifact specific to LUNA's particular dynamics.
+## ~~#2 — Cross-window robustness check~~ RESOLVED
+**Status:** ~~open~~ **closed — confirmed**
+**Priority:** ~~high~~ n/a
+~~All Phase 1 and Phase 2 work has been done exclusively on 2022-05...~~
+Reran on FTX (2022-11): naive k-fold's leakage signature replicated
+almost identically (20/20 shifts positive, same order-of-magnitude
+effect size as May). The real label's signal also replicated (and was
+slightly *stronger*: ≈4.0σ/7.4σ above artifact baseline vs. May's
+≈3.7σ/6.1σ). Caught and fixed a real bug along the way — `ELEVATED_STATES`
+was hardcoded from May's specific HMM fit and needed to be derived
+per-window by variance rank instead, since state indices aren't stable
+across independent EM fits. Full detail:
+`notes/cross_window_robustness_check.md`. COVID and May 2021 remain
+unused if a third confirmation is ever wanted, but not required.
 
-## #3 — Purged walk-forward's residual leakage: real or noise?
-**Status:** open
-**Priority:** medium
-Current result: mean diff +0.043, std 0.055, 14/20 shifts positive
-(p≈0.04) — suggestive but not conclusive at 20 shifts. Increase to 50-100
-null shifts to tighten this estimate enough to say with confidence whether
-purging leaves a genuine residual leak or whether the current result is
-just sampling noise at this shift count.
+## ~~#3 — Purged walk-forward's residual leakage: real or noise?~~ RESOLVED
+**Status:** ~~open~~ **closed — noise**
+**Priority:** ~~medium~~ n/a
+~~Current result: mean diff +0.043... suggestive but not conclusive...~~
+The FTX cross-window check (above) answered this without needing more
+shifts on May: FTX's purged residual is +0.008 with exactly 10 of 20
+shifts positive — a coin flip, no directional signal. Two independent
+windows, and only one (May) showed anything resembling a residual, at a
+magnitude that now looks like sampling noise at n=20 rather than a
+genuine small leak. Purged/embargoed walk-forward is treated as removing
+the leakage to within noise on both windows tested.
 
 ## #4 — Jump-test calibration overshoot
 **Status:** open
