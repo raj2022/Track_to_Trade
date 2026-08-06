@@ -131,17 +131,74 @@ demonstration of the project's central thesis: apparent predictive power
 can be an artifact of validation methodology rather than genuine signal,
 and verifying that requires more than one plausible-looking null.
 
+## Closing the loop: does the real label show genuine signal, calibrated against the null?
+
+The raw real-label AUCs (0.918 naive, 0.914 purged) were flagged from the
+start as close to tautological — the label is a forward average of the
+same quantity used as the dominant feature. Given everything above, raw
+AUC on an autocorrelated label cannot be trusted at face value; the same
+real-vs-dummy correction applied to the null shifts was applied to the
+real label too (`scripts/phase2_real_vs_dummy_comparison.py`).
+
+| | naive_kfold | purged_walk_forward |
+|---|---|---|
+| real model AUC | 0.9180 | 0.9144 |
+| dummy (prior) AUC | 0.1344 | 0.5312 |
+| **diff (real − dummy)** | **+0.7836** | **+0.3832** |
+
+Both dummy baselines land close to the null-shift means (0.1297 naive,
+0.5509 purged) — expected, since the real label shares the same
+autocorrelation/imbalance structure the null shifts were built to
+preserve. This is itself a consistency check that passed.
+
+**Calibrating the real-label diff against the null-shift diff
+distribution** (mean ± std, from the 20 null shifts) rather than against
+zero:
+
+- naive_kfold: null diffs = 0.349 ± 0.118. Real label's diff (0.784) is
+  **≈3.7 std above** this distribution.
+- purged_walk_forward: null diffs = 0.043 ± 0.055. Real label's diff
+  (0.383) is **≈6.1 std above** this distribution.
+
+Both are far enough outside the artifact-only range to conclude the real
+label carries genuine, feature-driven predictive signal under either
+scheme — not just "positive," but clearly distinguishable from what label
+autocorrelation and CV mechanics alone would produce.
+
+**A clean decomposition falls out of this, worth stating explicitly:** the
+gap between the real label's naive diff (0.784) and purged diff (0.383) is
+0.400 — almost exactly naive k-fold's own characteristic leakage inflation
+on a signal-free label (the null mean of 0.349). The real label's naive
+result is well explained as genuine signal (≈0.38, matching the purged
+estimate) plus naive's typical leakage inflation (≈0.35, matching the null
+baseline) ≈ 0.73, close to the observed 0.784.
+
+## Final Phase 2 headline
+
+The features genuinely predict near-future elevated-regime probability
+beyond trivial recency (purged diff +0.383, ≈6σ above an artifact-only
+baseline). Naive cross-validation inflates that apparent skill by an
+amount consistent with the same leakage mechanism independently
+demonstrated on the null labels. Purged, embargoed walk-forward removes
+that inflation while preserving the genuine signal. This is the complete,
+calibrated version of the result the project set out to demonstrate.
+
+
+
 ## Reproducibility
 
 - `python scripts/derive_horizon.py`
 - `python scripts/build_phase2_dataset.py data/raw/BTCUSDT-aggTrades-2022-05.zip`
 - `python scripts/phase2_leakage_stress_test.py` (raw real-label/null-label AUCs)
-- `python scripts/phase2_real_vs_dummy_comparison.py` (the decisive, confound-corrected result)
+- `python scripts/phase2_real_vs_dummy_comparison.py` (real-label + null-shift diffs, the decisive confound-corrected result)
 
 ## Next step
 
-With the leakage mechanism now cleanly demonstrated, extend the real-label
-purged-walk-forward result with proper decision-theoretic calibration
-(Phase 3) -- the naive-vs-purged gap on the *real* label (0.918 vs. 0.914,
-still small) can now be interpreted with confidence, since the validation
-methodology itself has been stress-tested rather than assumed sound.
+Phase 2's core result is complete and calibrated: genuine feature-driven
+signal on the real label (purged diff +0.383, ≈6σ above the artifact-only
+baseline), naive CV's inflation explained by the same leakage mechanism
+demonstrated on the null labels, purged walk-forward correctly removing
+it. Remaining open items (cross-window robustness check, tightening the
+purged walk-forward residual estimate, updating `run_imm_filter.py`) are
+tracked in `ISSUES.md` rather than blocking Phase 3. Next: decision-
+theoretic calibration of the purged-walk-forward predictions (Phase 3).
