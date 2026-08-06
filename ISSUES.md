@@ -50,20 +50,23 @@ spilling into spot via arbitrage) was never directly checked -- would need
 trading-intensity binning by UTC hour. Cheap to verify, not required for
 anything currently built.
 
-## #7 — Walk-forward calibration not yet built
-**Status:** open
-**Priority:** high (blocks the Bayes-risk threshold step)
-Three static calibration corrections (plain time split, and a regime-
-conditional split into two sub-attempts) all failed the same way:
-overconfidence on whichever chronological chunk was held out, regardless
-of how the data was sliced. Diagnosis: calibration drifts over time, not
-over regime — no static mapping fit once and applied forward has worked.
-Fix: refit isotonic regression on an expanding or rolling window, the same
-cadence as the purged walk-forward CV itself, rather than fitting one
-static map. Full detail: `notes/phase3_calibration_drift.md`. The Bayes-
-risk decision threshold (derived from the Roll spread ratio, ≈0.097)
-should not be applied to any of the currently-rejected calibrated
-probabilities — wait for the walk-forward version.
+## ~~#7 — Walk-forward calibration not yet built~~ RESOLVED
+**Status:** ~~open~~ **closed — investigated, resolved by decision**
+**Priority:** ~~high~~ n/a
+~~Three static calibration corrections... all failed the same way...~~
+Full investigation completed: five recalibration attempts total (static
+time split, static regime split, walk-forward isotonic in both expanding
+and rolling form, walk-forward Platt scaling) — all five failed to
+produce a robust fix. Diagnosis: miscalibration likely depends on more
+than the raw scalar probability any of these methods could see (plausibly
+the latent regime itself), which no 1-D recalibration can capture.
+**Decision:** proceed with raw (uncalibrated) probabilities for the
+Bayes-risk threshold, with the known miscalibrated range (~0.05-0.5)
+stated explicitly as a limitation rather than hidden. The derived
+threshold (p*≈0.097) was cross-checked against the empirical cost-
+minimizing threshold and held up reasonably well despite the caveat.
+Full detail: `notes/phase3_calibration_drift.md`,
+`notes/phase3_bayes_threshold_result.md`.
 
 ## #6 — LOBSTER cross-check never used
 **Status:** open, optional

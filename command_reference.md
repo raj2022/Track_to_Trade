@@ -111,7 +111,7 @@ python scripts/phase2_real_vs_dummy_comparison.py
 **Reusable modules (not run directly):**
 - `src/cv_splits.py` — `naive_kfold_splits`, `purged_embargoed_walk_forward_splits`
 
-## Phase 3: calibration (in progress -- three static corrections rejected)
+## Phase 3: calibration and Bayes-risk threshold (complete)
 
 ```bash
 # Saves the purged walk-forward OOF predictions on real_label for reuse
@@ -124,25 +124,31 @@ python scripts/save_oof_predictions.py
 python scripts/calibration_check.py
 
 # Attempt 1 (REJECTED): isotonic regression, chronological time split.
-# Made things WORSE on the held-out half (log score 0.305 -> 0.366), in the
-# OPPOSITE miscalibration direction (overconfidence, not underconfidence).
 python scripts/recalibrate.py
 
 # Attempt 2 (REJECTED): regime-conditional split (elevated_prob median).
-# Worse in BOTH regimes, more severely than the time split. Refuted the
-# regime-dependence hypothesis.
 python scripts/recalibrate_by_regime.py
 
-# Diagnosis: every attempt calibrates on an earlier chronological chunk and
-# evaluates on a later one, and every one fails the same way regardless of
-# how the data is sliced -- calibration DRIFTS OVER TIME, not over regime.
-# See notes/phase3_calibration_drift.md.
+# Attempts 3-5 (ALL REJECTED): walk-forward isotonic (expanding), walk-
+# forward isotonic (rolling, 5d), walk-forward Platt scaling (rolling, 5d).
+# Toggle CALIBRATION_METHOD and ROLLING_WINDOW_DAYS to reproduce each.
+python scripts/calibrate_walk_forward.py
+
+# DECISION: five attempts failed. Proceed with RAW probabilities; the
+# known miscalibrated range (~0.05-0.5) is stated as an explicit limitation
+# rather than hidden. See notes/phase3_calibration_drift.md.
+
+# Bayes-risk threshold, derived from the Roll spread ratio (crisis/calm =
+# 1.127/0.121 ~ 9.31), applied to raw probabilities.
+python scripts/bayes_threshold.py
+# -> p* = 0.097; mean cost reduction vs. naive p=0.5: +48.6%
+# -> empirical cost-curve minimum (~0.10-0.13) sits close to p* despite
+#    the documented miscalibration -- a real, if imperfect, validation
 ```
 
-**Not yet built:** walk-forward calibration (expanding/rolling isotonic
-refit, same cadence as the purged walk-forward CV) -- tracked as `ISSUES.md` #7.
-The Bayes-risk threshold (derived from the Roll spread ratio, R_crisis/R_calm
-≈ 9.3, giving p* ≈ 0.097) should not be applied until this is resolved.
+**Phase 3 complete.** Full arc: `notes/phase3_calibration_drift.md`
+(five failed recalibration attempts, honestly documented) and
+`notes/phase3_bayes_threshold_result.md` (final decision-theoretic result).
 
 ## Status
 
@@ -159,15 +165,15 @@ Phase 2 notes:
 
 Phase 3 notes:
 - `notes/phase3_calibration_drift.md`
+- `notes/phase3_bayes_threshold_result.md`
 
-**Phase 1: fully complete. Phase 2: core deliverable complete. Phase 3: in progress -- calibration drift diagnosed, walk-forward fix not yet built.**
+**Phase 1: fully complete. Phase 2: core deliverable complete. Phase 3: complete.**
 
 ## Next commands (not yet run)
 
-- Build walk-forward calibration (expanding/rolling isotonic refit) -- `ISSUES.md` #7, currently blocking the Bayes-risk threshold step
-- Derive and apply the Bayes-risk decision threshold (Roll spread ratio ≈9.3, p* ≈ 0.097) once calibration is fixed; compare expected cost against the naive 0.5 cutoff
 - Update `run_imm_filter.py` to the canonical K=4 parameters, or retire it
 - Re-run `build_phase2_dataset.py` / the stress test on another event window
   (COVID, May 2021, or FTX) to confirm the leakage result isn't LUNA-specific
 - More null shifts (50-100 instead of 20) to tighten the purged walk-forward
   residual estimate (+0.043, std 0.055) enough to know if it's real
+- Phase 4 (stretch): latency/compression Pareto frontier or GNN cross-asset extension

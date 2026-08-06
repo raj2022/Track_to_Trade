@@ -95,11 +95,19 @@ Full detail: `notes/k4_naive_bipower_phase1_final_closeout.md`.
 - **Not yet started:** confirming this result isn't LUNA-specific using the other downloaded event windows, and tightening the purged walk-forward residual estimate with more null shifts (both tracked in `ISSUES.md`).
 - **Why this mattered methodologically:** the raw, uncorrected AUC comparison from the first run of this test would have supported the *opposite*, wrong conclusion (naive k-fold's raw AUC of ~0.48 looked like "no leakage," when in fact a large positive leakage effect was being masked by an unrelated negative structural bias in the same scheme). Only building a proper feature-blind control — itself only necessary because two earlier null constructions had already failed — uncovered the true, correctly-isolated effect. The same discipline then applied to the real label prevented a second potential error: trusting the raw 0.918 AUC at face value instead of calibrating it against the same null-shift-derived baseline.
 
-### Phase 3 (weeks 4–6): Calibration and decision theory
+### Phase 3 (weeks 4–6): Calibration and decision theory — **complete**
 
-- Convert the filter's regime posterior into a genuinely calibrated probability: reliability diagrams, proper scoring rules (log score, CRPS), evaluated walk-forward.
-- Derive the decision threshold from an explicit asymmetric cost matrix (Bayes risk) rather than defaulting to 0.5 — directly targeting the project's stated calibration weakness.
-- **Cost-aware reality check.** Take the Roll-implied effective spread already derived in Phase 1 (0.121bp calm / 1.127bp crisis) plus Binance's published taker fee, and ask whether a signal at the derived Bayes-optimal threshold would clear round-trip costs. This is explicitly *not* a backtest or a profitability claim.
+- **Reliability check on the purged-walk-forward `real_label` predictions found real, systematic underconfidence** in roughly the 0.05–0.5 predicted-probability range (5 of 10 quantile bins, up to 8σ off per the binomial standard error, consistent in direction) — not visible on the plot alone, only in the per-bin SE table.
+- **Five recalibration attempts, all rejected, each tested and diagnosed rather than assumed:**
+  1. Isotonic regression, static chronological time split — made things *worse* (log score 0.305→0.366), in the *opposite* miscalibration direction on the held-out half.
+  2. Isotonic regression, regime-conditional split (elevated_prob median) — worse in both regimes, more severely; refuted the regime-dependence hypothesis.
+  3–4. Isotonic regression, walk-forward daily refit (expanding, then rolling 5-day window) — neither improved on real data; the rolling version also revealed ~10% of predictions fell in windows containing only one class, a genuine fragility of short windows against a rare, autocorrelated label.
+  5. Platt scaling (2-parameter logistic fit), walk-forward rolling — tested the hypothesis that isotonic's flexibility, not the window shape, was the problem; succeeded on synthetic drift data but only marginally moved aggregate scores on real data while making several individual bins *worse*.
+  Full arc, including the reasoning discarded at each step: `notes/phase3_calibration_drift.md`.
+- **Decision: proceed with raw (uncalibrated) probabilities**, stating the known miscalibrated range explicitly as a limitation rather than continuing to search for a sixth variant — five attempts spanning both plausible axes (split scheme, calibrator flexibility) constitutes a genuine negative result, and further iteration risked becoming exactly the kind of overfitting-to-one-dataset this project is built to catch.
+- **Bayes-risk threshold derived from Phase 1's own numbers**, not asserted: cost ratio C_FN/C_FP = Roll-implied spread ratio (crisis/calm) ≈ 9.31, giving p* ≈ 0.097. Applied to raw probabilities, with an explicit runtime warning since p* falls inside the miscalibrated range.
+- **Result:** mean expected cost reduced 48.6% versus the naive p=0.5 cutoff (0.4317 vs. 0.8405 per step), trading a large increase in false positives (1,984→9,209) for a large decrease in false negatives (3,680→1,011) — the correct direction under the derived ~9.3x cost asymmetry. **The empirical cost-minimizing threshold, swept independently across all possible thresholds, landed close to the theoretically derived p* despite the documented miscalibration** — a real, if imperfect, validation that the derivation held up under real data. Full result: `notes/phase3_bayes_threshold_result.md`.
+- **Explicitly not a backtest or profitability claim** — a decision-theoretic result under a stated cost model, consistent with the project's non-goals throughout.
 
 ### Phase 4 (weeks 6–8, stretch — pick one)
 
@@ -115,6 +123,8 @@ Full detail: `notes/k4_naive_bipower_phase1_final_closeout.md`.
 - No claim that Roll-implied spread equals the exchange's displayed quoted spread.
 - No claim that purged walk-forward eliminates leakage completely — the residual +0.043 effect (std 0.055, 14/20 shifts positive) is reported as a real, unresolved, mostly-but-not-entirely-eliminated finding.
 - No claim that the jump-test's day-count calibration is fully resolved (9-vs-1 overshoot, Phase 1).
+- No claim that raw probabilities are well-calibrated — five recalibration attempts all failed, and the known miscalibrated range is stated as an explicit limitation on the Phase 3 Bayes threshold result rather than hidden.
+- No claim that the Phase 3 cost-reduction figure (+48.6%) represents realized profitability — it is a decision-theoretic result under an explicit, derived cost model, not a backtest.
 
 ---
 
@@ -124,7 +134,7 @@ Full detail: `notes/k4_naive_bipower_phase1_final_closeout.md`.
 |---|---|
 | Non-stationarity, walk-forward validation, structural breaks, multiple-testing bias | Core content of Phase 2, now with an empirically demonstrated leakage result, not just a described methodology |
 | Microstructure (spreads, noise, order flow) | Substantial — Roll estimator, signature-plot failure diagnosis, staleness/sweep robustness checks, per-regime R decomposition |
-| Realistic backtesting (costs, leakage, overlapping labels) | Leakage: empirically demonstrated and quantified in Phase 2. Costs: planned for Phase 3. No full backtest attempted — flagged as a deliberate boundary. |
+| Realistic backtesting (costs, leakage, overlapping labels) | Leakage: empirically demonstrated and quantified in Phase 2. Costs: Phase 3's Bayes-risk threshold, derived from Phase 1's spread numbers, +48.6% cost reduction vs. naive. No full backtest attempted — flagged as a deliberate boundary. |
 | Implementation | Python/NumPy/pandas, PyTorch, JAX, scikit-learn |
 | Portfolio construction and risk | Explicitly out of scope (Section 7), with reasoning stated |
 | Finance fundamentals | Covered at the depth needed for spot crypto microstructure |
@@ -143,13 +153,16 @@ Full detail: `notes/k4_naive_bipower_phase1_final_closeout.md`.
 - **The label-autocorrelation CV-structural confound:** discovered because the corrected null's results still didn't match the leakage hypothesis (purged showing consistent bias, naive showing none) — diagnosed via a feature-blind dummy-classifier control rather than accepted at face value, revealing a genuine, mathematically explicable bias in each CV scheme's mechanics, orthogonal to any feature relationship.
 - **Final, confound-corrected leakage result:** real-model-AUC-minus-dummy-AUC per shift. Naive k-fold: 20/20 shifts positive (p≈10⁻⁶). Purged walk-forward: 14/20 shifts positive (p≈0.04), mean smaller than its own std — reported as "mostly eliminated," not "proven zero."
 - **Real-label calibration (closing the loop):** the same real-vs-dummy correction was applied to the real label rather than trusting its raw ~0.92 AUC. Calibrated against the null-shift diff distributions as an empirical reference, the real label's diff sits ≈3.7σ (naive) and ≈6.1σ (purged) above the artifact-only baseline — confirmed as genuine signal, with a clean decomposition showing naive's inflated result ≈ real signal + naive's own characteristic leakage bias (both independently measured on the null shifts).
+- **Reliability check:** found systematic underconfidence in the purged-walk-forward `real_label` predictions across ~0.05–0.5 predicted probability, up to 8σ off per bin — real and consistent, invisible on the plot alone, only visible via the per-bin standard error.
+- **Recalibration, five attempts, all rejected:** static time split (made things worse, opposite-direction bias); static regime split (worse in both regimes, refuting the regime hypothesis); walk-forward isotonic, expanding and rolling window (neither improved real-data results); walk-forward Platt scaling (worked on synthetic drift data, did not clearly work on real data). Decision to proceed with raw probabilities made explicitly, after exhausting both plausible fix axes (split scheme, calibrator flexibility), rather than continuing to search indefinitely.
+- **Bayes-risk threshold:** derived from the Roll spread ratio (crisis/calm ≈ 9.31) rather than asserting a cost matrix, giving p*≈0.097. Validated post hoc against an independently swept empirical cost curve — the theoretical and empirical optima landed close together despite the known miscalibration in that region.
 
 ---
 
 ## 10. Deliverables
 
 - Public GitHub repository (`Track_to_Trade`), MIT- or similarly-licensed, fully reproducible from the download scripts.
-- `notes/`: a derivation log for every threshold in the project, including rejected attempts — now including two rejected null-label constructions and their diagnoses.
+- `notes/`: a derivation log for every threshold in the project, including rejected attempts — now including two rejected null-label constructions and five rejected recalibration attempts, all diagnosed rather than silently discarded.
 - `ISSUES.md`: tracked open items not currently blocking progress, reviewed before considering the project done.
 - `plots/`: all generated figures, referenced from `notes/`.
 - `src/kalman.py`, `src/imm.py`, `src/cv_splits.py`: implementations, unit/synthetic-validated before use on real data in every case.
@@ -161,17 +174,18 @@ Full detail: `notes/k4_naive_bipower_phase1_final_closeout.md`.
 |---|---|---|
 | 1–2 | Phase 1: filter + all derived parameters + baseline model + jump/diffusion split | **Fully complete** |
 | 2–4 | Phase 2: artifact stress test, walk-forward validation | **Core deliverable complete: leakage mechanism demonstrated and real-label signal validated (≈6σ above artifact baseline); cross-window robustness check tracked in `ISSUES.md`** |
-| 4–6 | Phase 3: calibration, decision threshold, cost-aware check | Not started |
+| 4–6 | Phase 3: calibration, decision threshold, cost-aware check | **Complete: five recalibration attempts honestly documented and rejected; Bayes-risk threshold derived and validated, +48.6% cost reduction vs. naive** |
 | 6–8 | Phase 4 (stretch): latency/compression Pareto frontier or GNN cross-asset extension | Not started |
 
 ## 12. What a 45-minute interview conversation looks like
 
 Anticipated probes and where the project answers them:
 - *"How do you know your regime detector isn't just overfitting the backtest?"* → the Phase 2 leakage stress test doesn't just describe the fix, it demonstrates the failure and the fix empirically, with a p≈10⁻⁶ result.
-- *"Why should I trust this threshold?"* → every threshold traces to a derivation in `notes/`, walkable on a whiteboard.
+- *"Why should I trust this threshold?"* → every threshold traces to a derivation in `notes/`, walkable on a whiteboard — including the Bayes-risk threshold, derived from Phase 1's own spread numbers rather than asserted.
 - *"Did you find alpha?"* → no, and the reasoning for why that claim would be dishonest at this scope is itself part of the answer.
-- *"Walk me through a time your first approach was wrong."* → several candidates now, including two consecutive null-label construction failures in Phase 2 alone.
+- *"Walk me through a time your first approach was wrong."* → several candidates now, including two consecutive null-label construction failures in Phase 2, and five consecutive recalibration failures in Phase 3.
 - *"Walk me through a model-selection decision you second-guessed."* → the K=5 → K=4 reversal, or the two null-construction rejections in Phase 2.
 - *"Tell me about a result that surprised you and how you resolved it."* → the label-autocorrelation CV-structural confound — purged walk-forward showing a *consistent* bias where naive k-fold showed none, the opposite of the hypothesis, resolved via a feature-blind dummy-classifier control rather than force-fit into the expected story.
 - *"How do you know your added complexity is worth it?"* → the naive-baseline comparison (Phase 1) and, at a deeper level, the dummy-classifier control in Phase 2.
-- *"What's a result you have to report with a caveat?"* → the purged walk-forward's residual leakage (+0.043, std 0.055) — mostly but not conclusively eliminated, reported honestly rather than rounded up.
+- *"What's a result you have to report with a caveat?"* → the purged walk-forward's residual leakage (+0.043, std 0.055), or the Phase 3 Bayes threshold applied to known-imperfect raw probabilities — both reported honestly rather than rounded up.
+- *"When did you decide to stop trying to fix something?"* → the calibration saga — five attempts across two plausible fix axes, then a deliberate decision to proceed with a documented limitation rather than keep searching for a variant that happens to work on one month of data.

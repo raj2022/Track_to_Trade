@@ -77,12 +77,72 @@ calm" from "everything else" rather than two genuinely distinct regimes,
 a real confound in that specific test. It doesn't change the conclusion,
 since the drift pattern appeared identically in both halves regardless.
 
-## Next step
+## Attempt 3 (rejected): walk-forward isotonic, expanding window
 
-Calibrate walk-forward, the same way the classifier itself is already
-evaluated -- refit the isotonic mapping on an expanding or rolling window
-as time progresses, rather than fitting one static map anywhere and
-applying it forward. Not yet built.
+Refit isotonic daily on all prior data (expanding), mirroring the
+classifier's own purged walk-forward cadence. Tested first on synthetic
+data with continuous drift: did not clearly help (log score got slightly
+worse, several bins' |diff/SE| increased). Rationale for the failure:
+an expanding window still averages together an increasingly long, and
+therefore increasingly stale, history of past miscalibration levels if
+the true drift is continuous rather than a one-time shift -- the same
+underlying problem as the static splits, just spread across more, smaller
+steps instead of one big one.
+
+## Attempt 4 (rejected): walk-forward isotonic, rolling window
+
+Same daily refit cadence, but using only the most recent N days (5, then
+compared against 3 and 10) rather than the full expanding history --
+intended to track continuous drift more responsively. On real data:
+**worse than raw on every metric** — log score 0.339 → 0.454, diff/SE
+peak growing from 7.8σ (raw) to 18.4σ (calibrated). Also surfaced a
+separate real issue: ~10% of predictions (4,317) were skipped because
+their 5-day window contained only one class — a genuine fragility of
+short rolling windows against a rare (~28%), autocorrelated label.
+
+## Attempt 5 (rejected, but instructive): walk-forward Platt scaling, rolling window
+
+Hypothesis: isotonic regression's flexibility (low bias, high variance) is
+the real problem, not the window shape — it overfits small calibration
+windows and fails to generalize even one window forward. Platt scaling
+(2-parameter logistic fit on the log-odds of the raw prediction) is far
+more constrained and should be more stable on small samples. Tested on the
+same synthetic continuous-drift data first: **succeeded there** — log
+score improved (0.580→0.551), Brier improved, diff/SE dropped from
+double-digit σ to mostly under 4σ. On real data: **did not clearly
+succeed** — log score and Brier moved only marginally (0.3391→0.3382,
+0.1041→0.1033), while the per-bin diff/SE table got *worse* in several
+bins (peak 7.8σ raw → 12.9σ calibrated). A small aggregate-metric
+improvement sitting on top of larger local miscalibration is not a fix —
+it's the same problem redistributed, not resolved.
+
+## Final assessment: recalibration abandoned, not indefinitely pursued
+
+Five attempts, spanning both axes that plausibly mattered — split scheme
+(static time, static regime, expanding walk-forward, rolling walk-forward)
+and calibrator flexibility (isotonic, Platt) — failed to produce a robust
+fix. Continuing to search for a sixth variant that happens to work on this
+one month of data would itself become a version of the exact failure mode
+this project is built to catch: fitting increasingly specific corrections
+to one dataset until something looks clean, rather than accepting a
+genuine negative result.
+
+**Most likely underlying reason:** the true miscalibration probably
+depends on more than the single scalar raw probability that every
+recalibration method here could see — plausibly on which latent regime is
+actually active, not just the classifier's point estimate of it. A 1-D
+recalibration function, however constructed, structurally cannot capture
+that. Fixing this properly would require calibration conditional on
+richer state information than was available to any of these attempts, not
+a better choice of window or calibrator.
+
+**Decision: proceed to the Bayes-risk threshold using the RAW (uncalibrated)
+probabilities**, with the known miscalibration in the ~0.05–0.5 predicted-
+probability range (Result 1, above) reported as an explicit, documented
+limitation on the resulting decision — since the derived threshold
+(≈0.097) sits inside that range. This is the honest choice: a stated
+limitation the reader can weigh, rather than false confidence built on a
+recalibration that did not demonstrably hold up under real-data testing.
 
 ## Reproducibility
 
@@ -90,3 +150,15 @@ applying it forward. Not yet built.
 - `python scripts/calibration_check.py` (full-dataset reliability check, Result 1)
 - `python scripts/recalibrate.py` (Attempt 1, rejected)
 - `python scripts/recalibrate_by_regime.py` (Attempt 2, rejected)
+- `python scripts/calibrate_walk_forward.py` (Attempts 3–5, all rejected —
+  toggle `CALIBRATION_METHOD` and `ROLLING_WINDOW_DAYS` to reproduce each)
+
+## Next step
+
+Derive and apply the Bayes-risk decision threshold to the RAW probabilities
+(`data/processed/real_label_oof_predictions.parquet`), using the Roll
+spread ratio (R_crisis/R_calm ≈ 9.3, giving p* ≈ 0.097), with the known
+0.05–0.5 miscalibration range stated explicitly as a limitation on the
+resulting decision rather than silently ignored.
+
+

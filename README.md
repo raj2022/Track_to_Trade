@@ -21,7 +21,7 @@ This is explicitly **not** an attempt to demonstrate a profitable trading strate
 |---|---|---|---|
 | 1 | 1–2 | State-space filter (Kalman → IMM), every parameter derived; baseline filter evaluation; naive-baseline comparison; bipower jump/diffusion split. | **Fully complete** |
 | 2 | 2–4 | Artifact stress test: leaky vs. purged label sets, permutation-derived null, walk-forward validation. | **Core deliverable complete: leakage mechanism demonstrated (p≈10⁻⁶) and real-label signal validated (≈6σ above artifact baseline); cross-window robustness check outstanding** |
-| 3 | 4–6 | Calibration (reliability diagrams, proper scoring rules) and a Bayes-risk decision threshold; cost-aware reality check using the derived spread estimates. | Not started |
+| 3 | 4–6 | Calibration (reliability diagrams, proper scoring rules) and a Bayes-risk decision threshold; cost-aware reality check using the derived spread estimates. | **Complete: five recalibration attempts all failed (honestly documented); Bayes-risk threshold derived and applied to raw probabilities, +48.6% cost reduction vs. naive** |
 | 4 | 6–8 | Stretch: latency/accuracy Pareto frontier under model compression, or cross-asset extension via a GNN. | Not started |
 
 ## Headline Phase 2 result
@@ -29,6 +29,10 @@ This is explicitly **not** an attempt to demonstrate a profitable trading strate
 A classifier trained on a label engineered to have **zero true relationship** to its features shows overwhelming apparent skill under naive k-fold cross-validation — every one of 20 independent trials came back positive (p≈10⁻⁶ under a fair-coin null) — and that apparent skill drops by roughly 8x under purged, embargoed walk-forward validation. Getting to this result required diagnosing and fixing two separate broken null-label constructions and a previously-invisible confound (the null label's own autocorrelation being separately exploitable by each CV scheme's mechanics, independent of any feature).
 
 **Closing the loop:** the same correction was then applied to the *real* label. Its feature-driven signal (purged diff +0.383) sits ≈6σ above the null-shift-calibrated artifact-only baseline — genuine, not just an autocorrelation artifact — while naive CV's inflated version of that same result decomposes almost exactly into real signal (≈0.38) plus naive's own characteristic leakage inflation (≈0.35, matching the null-label baseline). **Phase 2's core deliverable is complete.** Full arc: `notes/phase2_leakage_stress_test_full_arc.md`.
+
+## Headline Phase 3 result
+
+Reliability checking found the classifier's raw probabilities systematically underconfident in the ~0.05–0.5 range (up to 8σ off). **Five separate recalibration attempts** — static time split, static regime split, walk-forward isotonic regression (both expanding and rolling window), walk-forward Platt scaling — **all failed** to produce a robust fix, a genuine and instructive negative result documented in full rather than papered over. Decision: proceed with raw probabilities, stating the limitation explicitly. The Bayes-risk decision threshold (p*≈0.097, derived from the Roll spread ratio established in Phase 1) was then applied to raw probabilities and reduced mean expected cost by **48.6%** versus the naive p=0.5 cutoff — and its empirical cost-minimizing threshold landed close to the theoretically derived one despite the documented miscalibration, a real if imperfect validation. Full arc: `notes/phase3_calibration_drift.md`, `notes/phase3_bayes_threshold_result.md`.
 
 ## Data
 
@@ -88,9 +92,12 @@ plots/           generated figures (convention adopted partway through Phase 1;
 - [x] Leakage mechanism empirically demonstrated: naive k-fold shows overwhelming feature-driven leakage (p≈10⁻⁶); purged walk-forward removes ~8x of it
 - [x] Real-label signal validated against the null-shift-calibrated baseline (≈6σ above artifact-only noise, purged scheme) — Phase 2's core deliverable is complete
 - [ ] Cross-window robustness check (confirm the leakage result isn't LUNA-specific) — tracked in `ISSUES.md`
-- [ ] Calibration and decision-threshold derivation (Phase 3)
+- [x] Reliability check on real_label — found systematic underconfidence (up to 8σ) in the 0.05–0.5 range
+- [x] Five recalibration attempts, all rejected, honestly documented (`notes/phase3_calibration_drift.md`)
+- [x] Bayes-risk threshold derived from the Roll spread ratio (p*≈0.097), applied to raw probabilities — 48.6% cost reduction vs. naive p=0.5, validated against the empirical cost curve
+- [x] **Phase 3 complete**
 
-See `notes/phase2_leakage_stress_test_full_arc.md` for the full Phase 2 write-up so far. See `ISSUES.md` for tracked open items not currently blocking progress.
+See `notes/phase3_bayes_threshold_result.md` for the final Phase 3 write-up. See `ISSUES.md` for tracked open items not currently blocking progress.
 
 ## Non-goals
 
@@ -98,3 +105,4 @@ See `notes/phase2_leakage_stress_test_full_arc.md` for the full Phase 2 write-up
 - Public daily/short-horizon data over a few weeks of work is not sufficient evidence of exploitable alpha, and no such claim is made.
 - The jump-test's ~9-flagged-days-vs-1-target overshoot is noted as an open calibration question, not silently accepted as clean.
 - Purged walk-forward's leakage reduction is reported as "mostly eliminated" (~8x reduction, residual not conclusively distinguishable from zero given 20 shifts), not "leakage-free."
+- The Phase 3 Bayes-risk threshold result (+48.6% cost reduction) is a decision-theoretic result under an explicit, derived cost model applied to raw (documented-as-imperfect) probabilities — not a backtest, not realized P&L, not a profitability claim.
