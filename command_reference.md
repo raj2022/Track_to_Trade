@@ -168,7 +168,10 @@ Phase 3 notes:
 - `notes/phase3_calibration_drift.md`
 - `notes/phase3_bayes_threshold_result.md`
 
-**Phase 1: fully complete. Phase 2: complete, cross-window validated. Phase 3: complete. `ISSUES.md` #1-3 resolved.**
+Phase 4 notes:
+- `notes/phase4_model_complexity_and_hardware.md`
+
+**Phase 1: fully complete. Phase 2: complete, cross-window validated. Phase 3: complete. Phase 4: complete. `ISSUES.md` #1-3 resolved.**
 
 ## Cross-window robustness check (post-Phase-3 cleanup)
 
@@ -193,7 +196,39 @@ python scripts/phase2_real_vs_dummy_comparison.py data/processed/phase2_dataset_
 (`ISSUES.md` #1, resolved) -- verified to run cleanly with the new Q/R/
 transition matrix before handing off.
 
+## Phase 4: model complexity + hardware investigation (complete)
+
+```bash
+# Build 3 more windows for a genuinely diverse combined dataset (LUNA and
+# FTX already built above). Same per-window elevated-state derivation.
+python scripts/build_phase2_dataset.py data/raw/BTCUSDT-aggTrades-2020-03.zip
+python scripts/build_phase2_dataset.py data/raw/BTCUSDT-aggTrades-2021-05.zip
+python scripts/build_phase2_dataset.py data/raw/BTCUSDT-aggTrades-2023-07.zip
+
+# Merge all 5 windows into one combined dataset (auto-discovers all
+# phase2_dataset_BTCUSDT-aggTrades-*.parquet files in data/processed/).
+python scripts/merge_multi_window_dataset.py
+# -> data/processed/phase2_dataset_combined.parquet, 221,450 rows, 5 windows
+
+# Logistic regression vs. MLP (16/32/64 units), scikit-learn implementation.
+python scripts/compare_lr_mlp_combined.py
+# -> AUC: LR=0.9105, mlp_16=-0.0093, mlp_32=-0.0060, mlp_64=-0.0067 (all lose)
+
+# Same comparison, PyTorch (auto-detects Apple Silicon MPS, or force with
+# a CLI arg: "cpu" or "mps", for a controlled hardware comparison).
+python scripts/compare_lr_mlp_torch_mps.py          # auto-detect (mps on this machine)
+python scripts/compare_lr_mlp_torch_mps.py cpu      # force CPU, same code
+# -> MLP still loses to LR in both device runs (9 total model runs, 3 implementations)
+# -> controlled CPU-vs-MPS timing: 16-unit MLP 1.57x SLOWER on MPS, 64-unit
+#    MLP 41% FASTER on MPS -- real overhead-vs-compute crossover, measured
+```
+
+**Decision: no MLP beat logistic regression anywhere, so the original**
+**compression-study plan doesn't apply.** Redirected to a controlled
+CPU-vs-MPS hardware benchmark instead. Full detail:
+`notes/phase4_model_complexity_and_hardware.md`.
+
 ## Next commands (not yet run)
 
-- Phase 4 (stretch): latency/compression Pareto frontier or GNN cross-asset extension
-- `ISSUES.md` #4, #5, #6 remain open (low priority, optional polish)
+- `ISSUES.md` #4, #5, #6 remain open (low priority, optional polish) —
+  project's active development is otherwise complete
